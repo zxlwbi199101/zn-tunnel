@@ -25,8 +25,8 @@ LDFLAGS += -lboost_log-mt\
 					 -lboost_regex-mt
 endif
 
-tun-lib: src/tun/Tun.cc src/logger.cc src/main.cc
+tun-lib: src/parser/ParseConfig.cc src/tun/Tun.cc src/logger.cc src/main.cc
 	$(CXX) $^ $(LDFLAGS) -o $@.o
 
 run: tun-lib
-	sudo ./tun-lib.o
+	echo "1" | sudo -S ./tun-lib.o

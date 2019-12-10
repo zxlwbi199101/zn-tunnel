@@ -2,6 +2,8 @@
 #include "./logger.h"
 #include "./tun/Tun.h"
 #include <signal.h>
+#include "./parser/ParseConfig.h"
+#define DEFAULT_INI "src/config/Autoconfig.ini"
 
 void _sigHandler(int signum) {
   tunlib::closeDumps();
@@ -9,7 +11,9 @@ void _sigHandler(int signum) {
 }
 
 int main(int argc, char **argv) {
-  tunlib::enableFileLog("/Users/xzhao048/Desktop/zntun%N.log");
+  pcx::ParseConfig config;
+  config.ReadConfig(DEFAULT_INI);
+  tunlib::enableFileLog(config.ReadString("LoggerStart", "dir", "/Users/edison/Desktop/zntun%N.log").c_str());
   tunlib::enableConsoleLog();
   signal(SIGINT, _sigHandler);
 
@@ -18,12 +22,12 @@ int main(int argc, char **argv) {
   if (!client.open() || !server.open()) {
     exit(1);
   }
-
+  std::string dir = config.ReadString("LoggerPackage", "dir", "/Users/edison/Desktop/ip");
   while (1) {
     auto buffer = client.read();
 
-    tunlib::dumpBuffer(buffer.data, buffer.len, "ip");
-    tunlib::dumpBuffer((uint8_t*)"IP_PACKET_END", 13, "ip");
+    tunlib::dumpBuffer(buffer.data, buffer.len, dir.c_str());
+    tunlib::dumpBuffer((uint8_t*)"IP_PACKET_END", 13, dir.c_str());
   }
 
   return 0;

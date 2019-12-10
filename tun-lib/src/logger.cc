@@ -44,8 +44,7 @@ namespace tunlib {
     streamPtr logFile;
 
     if (binLogs.find(dumpName) == binLogs.end()) {
-      logFile = streamPtr(new std::ofstream(
-        "/Users/xzhao048/Desktop/" + dumpName,
+      logFile = streamPtr(new std::ofstream( dumpName,
         std::ofstream::binary | std::ofstream::app
       ));
       binLogs.insert({ dumpName, logFile });
