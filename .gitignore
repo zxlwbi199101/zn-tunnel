@@ -31,4 +31,21 @@
 *.out
 *.app
 
-.vscode
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# library
+libtun/lib/

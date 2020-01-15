@@ -1,10 +1,10 @@
-#ifndef TUN_LIB_EXCEPTION_INCLUDED
-#define TUN_LIB_EXCEPTION_INCLUDED
+#ifndef LIBTUN_EXCEPTION_INCLUDED
+#define LIBTUN_EXCEPTION_INCLUDED
 
 #include <exception>
 #include <string>
 
-namespace tunlib {
+namespace libtun {
 
   class Exception: public std::exception {
   public:

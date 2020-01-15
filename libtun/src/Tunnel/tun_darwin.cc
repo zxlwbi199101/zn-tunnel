@@ -5,13 +5,13 @@
 #include <sys/kern_control.h>
 #include <net/if_utun.h>
 #include <stdint.h>
-
 #include <fmt/core.h>
-#include "../logger.h"
-#include "../Exception.h"
-#include "./Tun.h"
 
-namespace tunlib {
+#include <libtun/logger.h>
+#include <libtun/Exception.h>
+#include <libtun/Tunnel.h>
+
+namespace libtun {
 
   int openTun(std::string& name) {
     int fd = socket(PF_SYSTEM, SOCK_DGRAM, SYSPROTO_CONTROL);

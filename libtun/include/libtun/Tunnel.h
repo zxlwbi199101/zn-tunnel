@@ -1,18 +1,19 @@
-#ifndef TUN_LIB_TUN_INCLUDED
-#define TUN_LIB_TUN_INCLUDED
+#ifndef LIBTUN_TUNNEL_INCLUDED
+#define LIBTUN_TUNNEL_INCLUDED
 
 #include <stdint.h>
+#include <string>
 
-namespace tunlib {
+namespace libtun {
 
   const uint32_t MTU = 1500;
 
   struct TunBuffer {
     uint16_t len;
-    uint8_t *data;
+    uint8_t* data;
   };
 
-  class Tun {
+  class Tunnel {
   public:
     int fd = -1;
     std::string ifName;

@@ -1,7 +1,8 @@
-#ifndef TUN_LIB_LOGGER_INCLUDED
-#define TUN_LIB_LOGGER_INCLUDED
+#ifndef LIBTUN_LOGGER_INCLUDED
+#define LIBTUN_LOGGER_INCLUDED
 
 #include <boost/log/trivial.hpp>
+#include <string>
 
 #define trace BOOST_LOG_TRIVIAL(trace)
 #define debug BOOST_LOG_TRIVIAL(debug)
@@ -10,12 +11,13 @@
 #define error BOOST_LOG_TRIVIAL(error)
 #define fatal BOOST_LOG_TRIVIAL(fatal)
 
-namespace tunlib {
+namespace libtun {
 
-  void enableFileLog(const char *path, int rotateInMB = 10);
   void enableConsoleLog();
+  void enableFileLog(const std::string& path, int rotateInMB = 10);
 
-  void dumpBuffer(const uint8_t* buf, int len, std::string&& dumpName);
+  // void setDumpDir(const std::string& dir);
+  void dumpBuffer(const uint8_t* buf, int len, const std::string& dumpName);
   void closeDumps();
 
 }

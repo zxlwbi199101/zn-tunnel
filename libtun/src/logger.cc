@@ -1,14 +1,13 @@
+#include <fstream>
+#include <memory>
+#include <string>
+#include <unordered_map>
 #include <boost/log/expressions.hpp>
 #include <boost/log/sources/severity_logger.hpp>
 #include <boost/log/utility/setup/file.hpp>
 #include <boost/log/utility/setup/console.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
-#include <fstream>
-#include <memory>
-#include <string>
-#include <unordered_map>
-
-#include "./logger.h"
+#include <libtun/logger.h>
 
 namespace logging = boost::log;
 namespace sinks = boost::log::sinks;
@@ -17,9 +16,16 @@ namespace expr = boost::log::expressions;
 namespace attrs = boost::log::attributes;
 namespace keywords = boost::log::keywords;
 
-namespace tunlib {
+namespace libtun {
 
-  void enableFileLog(const char *path, int rotateInMB) {
+  void enableConsoleLog() {
+    logging::add_console_log(
+       std::cout,
+      keywords::format = "[%TimeStamp%][%Severity%]: %Message%"
+    );
+  }
+
+  void enableFileLog(const std::string& path, int rotateInMB) {
     logging::add_file_log(
       keywords::file_name = path,
       keywords::rotation_size = rotateInMB * 1024 * 1024,
@@ -30,21 +36,15 @@ namespace tunlib {
     logging::add_common_attributes();
   }
 
-  void enableConsoleLog() {
-    logging::add_console_log(
-      std::cout,
-      boost::log::keywords::format = "[%TimeStamp%][%Severity%]: %Message%"
-    );
-  }
 
   typedef std::shared_ptr<std::ofstream> streamPtr;
   std::unordered_map<std::string, streamPtr> binLogs;
 
-  void dumpBuffer(const uint8_t* buf, int len, std::string&& dumpName) {
+  void dumpBuffer(const uint8_t* buf, int len, const std::string& dumpName) {
     streamPtr logFile;
 
     if (binLogs.find(dumpName) == binLogs.end()) {
-      logFile = streamPtr(new std::ofstream( dumpName,
+      logFile = streamPtr(new std::ofstream(dumpName,
         std::ofstream::binary | std::ofstream::app
       ));
       binLogs.insert({ dumpName, logFile });

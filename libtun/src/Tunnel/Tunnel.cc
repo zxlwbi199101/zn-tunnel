@@ -1,15 +1,16 @@
 #include <stdint.h>
 #include <string>
-#include "fmt/core.h"
-#include "./Tun.h"
+#include <fmt/core.h>
+
+#include <libtun/Tunnel.h>
 
 #ifdef __APPLE__
   #include "./tun_darwin.cc"
 #endif
 
-namespace tunlib {
+namespace libtun {
 
-  bool Tun::open() {
+  bool Tunnel::open() {
     try {
       fd = openTun(ifName);
     } catch (std::exception& err) {
@@ -19,10 +20,10 @@ namespace tunlib {
     info << fmt::format("tunnel [{}] is opened.", ifName);
     return true;
   }
-  TunBuffer Tun::read() {
+  TunBuffer Tunnel::read() {
     return readTun(fd, readBuf, MTU);
   }
-  uint16_t Tun::write(const uint8_t* buf, uint16_t len) {
+  uint16_t Tunnel::write(const uint8_t* buf, uint16_t len) {
     return writeTun(fd, buf, len);
   }
 
