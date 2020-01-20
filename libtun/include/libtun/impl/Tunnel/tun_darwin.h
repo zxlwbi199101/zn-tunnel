@@ -3,25 +3,29 @@
 #include <sys/socket.h>
 #include <sys/sys_domain.h>
 #include <sys/kern_control.h>
+#include <sys/uio.h>
 #include <net/if_utun.h>
 #include <stdint.h>
 #include <fmt/core.h>
+#include <boost/asio/buffer.hpp>
 
-#include <libtun/logger.h>
 #include <libtun/Exception.h>
 #include <libtun/Tunnel.h>
 
 namespace libtun {
 
-  int openTun(std::string& name) {
-    int fd = socket(PF_SYSTEM, SOCK_DGRAM, SYSPROTO_CONTROL);
+  using boost::asio::const_buffer;
+  using boost::asio::mutable_buffer;
+
+  void Tunnel::_openTun() {
+    fd = socket(PF_SYSTEM, SOCK_DGRAM, SYSPROTO_CONTROL);
     if (fd == -1) {
       throw Exception(fmt::format("tun socket open failed: {}", strerror(errno)));
     }
 
     struct ctl_info ctlInfo = {
       .ctl_id = 0,
-      .ctl_name = UTUN_CONTROL_NAME
+      .ctl_name = UTUN_CONTROL_NAME,
     };
     if (ioctl(fd, CTLIOCGINFO, &ctlInfo) == -1) {
       throw Exception(fmt::format("tun ioctl error: {}", strerror(errno)));
@@ -32,7 +36,7 @@ namespace libtun {
       .sc_family = AF_SYSTEM,
       .ss_sysaddr = AF_SYS_CONTROL,
       .sc_id = ctlInfo.ctl_id,
-      .sc_unit = 0
+      .sc_unit = 0,
     };
 
     if (connect(fd, (struct sockaddr *)&sc, sizeof(sc)) == -1) {
@@ -45,22 +49,36 @@ namespace libtun {
       throw Exception(fmt::format("tun get name error: {}", strerror(errno)));
     }
 
-    name = tunname;
-    return fd;
+    ifName = tunname;
   }
 
-  TunBuffer readTun(int fd, uint8_t* buf, uint16_t len) {
-    return {
-      .len = static_cast<uint16_t>(read(fd, buf, len) - 4),
-      .data = buf + 4
+  inline ssize_t _read(int fd, void* buf, size_t len) {
+    struct iovec bufs[] = {
+      { .iov_base = buf, .iov_len = 4 },
+      { .iov_base = buf, .iov_len = len },
     };
+    return readv(fd, bufs, 2);
+  }
+
+  mutable_buffer Tunnel::read(mutable_buffer buffer) {
+    auto len = _read(fd, buffer.data(), buffer.size());
+    return mutable_buffer(buffer.data(), len < 4 ? 0 : (len - 4));
+  }
+
+  uint16_t Tunnel::read() {
+    auto len = _read(fd, readBuffer, MTU);
+    return len < 4 ? 0 : static_cast<uint16_t>(len - 4);
   }
 
   const uint8_t ip4Flag[] = {0, 0, 0, 4};
 
-  uint16_t writeTun(int fd, const uint8_t* buf, uint16_t len) {
-    write(fd, ip4Flag, 4);
-    return write(fd, buf, len);
+  uint16_t Tunnel::write(const const_buffer& buffer) {
+    struct iovec bufs[] = {
+      { .iov_base = (void*)ip4Flag, .iov_len = 4 },
+      { .iov_base = (void*)buffer.data(), .iov_len = buffer.size() },
+    };
+    auto len = writev(fd, bufs, 2);
+    return len < 4 ? 0 : static_cast<uint16_t>(len - 4);
   }
 
 }

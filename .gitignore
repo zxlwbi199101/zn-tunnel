@@ -46,6 +46,3 @@
 # System Files
 .DS_Store
 Thumbs.db
-
-# library
-libtun/lib/

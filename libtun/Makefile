@@ -3,7 +3,7 @@ SYSTEM ?= $(HOST_SYSTEM)
 
 CXX = g++
 CXXFLAGS += \
-	-DBOOST_LOG_DYN_LINK \
+	-DBOOST_ALL_DYN_LINK \
 	-std=c++11 \
 	-I./include
 
@@ -17,19 +17,18 @@ LDFLAGS += \
 	-lboost_regex-mt \
 	-lfmt
 
-ifeq ($(SYSTEM),Darwin)
+ifeq ($(SYSTEM), Darwin)
 else
 endif
 
-SOURCES = \
-	$(wildcard src/*.cc) \
-	src/Tunnel/Tunnel.cc
+TEST_SOURCES = $(wildcard test/*.cc test/**/*.cc)
+TEST_OBJS = $(patsubst %cc, %o, $(TEST_SOURCES))
 
-OBJS = $(addsuffix .o, $(basename $(SOURCES)))
+test: test-compile
+	sudo ./test.o
 
-libtun: $(OBJS)
-	mkdir -p lib
-	ar rcv lib/libtun.a $(OBJS)
+test-compile: $(TEST_OBJS)
+	$(CXX) $(LDFLAGS) $(TEST_OBJS) -o test.o
 
 clean:
-	rm -r $(OBJS) lib
+	rm -rf $(TEST_OBJS) test.o

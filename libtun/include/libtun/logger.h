@@ -1,8 +1,17 @@
 #ifndef LIBTUN_LOGGER_INCLUDED
 #define LIBTUN_LOGGER_INCLUDED
 
-#include <boost/log/trivial.hpp>
 #include <string>
+#include <fstream>
+#include <boost/log/expressions.hpp>
+#include <boost/log/sources/severity_logger.hpp>
+#include <boost/log/utility/setup/file.hpp>
+#include <boost/log/utility/setup/console.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/filesystem.hpp>
+#include <fmt/core.h>
+#include <libtun/Exception.h>
 
 #define trace BOOST_LOG_TRIVIAL(trace)
 #define debug BOOST_LOG_TRIVIAL(debug)
@@ -13,12 +22,78 @@
 
 namespace libtun {
 
-  void enableConsoleLog();
-  void enableFileLog(const std::string& path, int rotateInMB = 10);
+  namespace logging = boost::log;
+  namespace sinks = boost::log::sinks;
+  namespace src = boost::log::sources;
+  namespace expr = boost::log::expressions;
+  namespace attrs = boost::log::attributes;
+  namespace keywords = boost::log::keywords;
+  namespace fs = boost::filesystem;
 
-  // void setDumpDir(const std::string& dir);
-  void dumpBuffer(const uint8_t* buf, int len, const std::string& dumpName);
-  void closeDumps();
+  inline void _createFileByFullPath(const std::string& fullPath) {
+    fs::path p(fullPath);
+
+    if (!p.is_absolute()) {
+      fatal << "requires an absolute full path.";
+      throw Exception("requires an absolute full path.");
+    }
+    if (p.has_parent_path() && !fs::exists(p.parent_path())) {
+      fs::create_directories(p.parent_path());
+      info << fmt::format("directory {} not exists, created.", p.parent_path().string());
+    }
+  }
+
+  inline void enableConsoleLog() {
+    logging::add_console_log(
+      std::cout,
+      keywords::format = "[%TimeStamp%][%Severity%]: %Message%"
+    );
+  }
+
+  inline void enableFileLog(const std::string& fullPath, int rotateInMB) {
+    _createFileByFullPath(fullPath);
+
+    logging::add_file_log(
+      keywords::file_name = fullPath,
+      keywords::rotation_size = rotateInMB * 1024 * 1024,
+      keywords::time_based_rotation = sinks::file::rotation_at_time_point(0, 0, 0),
+      keywords::format = "[%TimeStamp%][%Severity%]: %Message%",
+      keywords::open_mode = std::ios_base::app
+    );
+    logging::add_common_attributes();
+  }
+
+  class BinLogger {
+  public:
+    BinLogger(const std::string& fullPath, const std::string& debugName = "") {
+      _createFileByFullPath(fullPath);
+
+      this->debugName = debugName;
+      this->file.open(fullPath, std::ofstream::binary | std::ofstream::app);
+
+      if (!file.is_open()) {
+        error << fmt::format("[{}] binlog [{}] open failed.", debugName, fullPath);
+      } else {
+        info << fmt::format("[{}] binlog file is {}.", debugName, fullPath);
+      }
+    }
+
+    void dump(const void* buf, uint32_t len) {
+      if (file.is_open()) {
+        file.write((char*)buf, len).flush();
+      }
+    }
+
+    ~BinLogger() {
+      if (file.is_open()) {
+        file.close();
+      }
+    }
+
+  private:
+    std::string debugName;
+    std::ofstream file;
+  };
 
 }
 
