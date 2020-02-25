@@ -12,7 +12,8 @@ LDFLAGS += \
 	-lboost_system-mt \
 	-lboost_date_time-mt \
 	-lboost_regex-mt \
-	-lfmt
+	-lfmt \
+	-lcryptopp
 
 SOURCES = $(wildcard *.cc)
 OBJS = $(addsuffix .o, $(basename $(SOURCES)))

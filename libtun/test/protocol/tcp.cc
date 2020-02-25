@@ -4,8 +4,8 @@
 
 BOOST_AUTO_TEST_SUITE(protocol_tcp)
 
-  typedef libtun::protocol::Ip4 Ip4;
-  typedef libtun::protocol::Tcp Tcp;
+  using libtun::protocol::Ip4;
+  using libtun::protocol::Tcp;
 
   auto sampleTCP = readFile("test/.data/ip_tcp_1");
 

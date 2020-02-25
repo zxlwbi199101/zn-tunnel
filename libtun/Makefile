@@ -15,13 +15,15 @@ LDFLAGS += \
 	-lboost_system-mt \
 	-lboost_date_time-mt \
 	-lboost_regex-mt \
-	-lfmt
+	-lfmt \
+	-lcryptopp
 
 ifeq ($(SYSTEM), Darwin)
 else
 endif
 
 TEST_SOURCES = $(wildcard test/*.cc test/**/*.cc)
+# TEST_SOURCES = test/main.cc test/BufferPool.cc
 TEST_OBJS = $(patsubst %cc, %o, $(TEST_SOURCES))
 
 test: test-compile

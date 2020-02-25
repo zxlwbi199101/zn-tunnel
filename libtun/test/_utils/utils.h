@@ -7,7 +7,7 @@
 #include <string>
 
 namespace fs = boost::filesystem;
-typedef boost::asio::mutable_buffer mutable_buffer;
+using boost::asio::mutable_buffer;
 
 inline mutable_buffer readFile(const std::string& path) {
   auto size = fs::file_size(path);

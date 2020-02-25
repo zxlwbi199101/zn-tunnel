@@ -4,10 +4,9 @@
 
 BOOST_AUTO_TEST_SUITE(protocol_ip4)
 
-  typedef libtun::protocol::Ip4 Ip4;
+  using libtun::protocol::Ip4;
 
   auto sampleUDP = readFile("test/.data/ip_udp_1");
-  // auto sampleTCP = readFile("test/.data/ip_tcp_1");
 
   BOOST_AUTO_TEST_CASE(get_values) {
     Ip4 ip(sampleUDP);
