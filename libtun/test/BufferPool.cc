@@ -65,6 +65,20 @@ BOOST_AUTO_TEST_SUITE(BufferPool)
       BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 0);
       BOOST_REQUIRE_EQUAL(buf.suffixSpace(), 17);
     }
+
+    BOOST_AUTO_TEST_CASE(to_const_buffer) {
+      TunBuffer buf(data, 20);
+      auto constBuffer = buf.toConstBuffer();
+      BOOST_REQUIRE_EQUAL(constBuffer.data(), buf.data());
+      BOOST_REQUIRE_EQUAL(constBuffer.size(), buf.size());
+    }
+
+    BOOST_AUTO_TEST_CASE(to_mutable_buffer) {
+      TunBuffer buf(data, 20);
+      auto mutableBuffer = buf.toMutableBuffer();
+      BOOST_REQUIRE_EQUAL(mutableBuffer.data(), buf.data());
+      BOOST_REQUIRE_EQUAL(mutableBuffer.size(), buf.size());
+    }
   BOOST_AUTO_TEST_SUITE_END()
 
   // test cases for BufferPool

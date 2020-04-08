@@ -1,10 +1,8 @@
 #include <string>
-#include <boost/asio/buffer.hpp>
 #include <boost/test/unit_test.hpp>
 #include <libtun/transmission/Cryptor.h>
 
 BOOST_AUTO_TEST_SUITE(protocol_transmission_cryptor)
-  using boost::asio::mutable_buffer;
 
   std::string data = "this is my data";
 

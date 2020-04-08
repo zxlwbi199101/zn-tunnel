@@ -5,8 +5,12 @@
 #include <list>
 #include <stack>
 #include <mutex>
+#include <boost/asio/buffer.hpp>
 
 namespace libtun {
+
+  using boost::asio::const_buffer;
+  using boost::asio::mutable_buffer;
 
   class Buffer {
   public:
@@ -29,6 +33,14 @@ namespace libtun {
     uint32_t prefixSpace() const { return _data - _internal; }
     uint32_t suffixSpace() const { return internalSize() - prefixSpace() - size(); }
 
+    const_buffer toConstBuffer() const {
+      return const_buffer(_data, _size);
+    }
+
+    mutable_buffer toMutableBuffer() const {
+      return mutable_buffer(_data, _size);
+    }
+
     // mutates
     uint32_t size(uint32_t len) {
       if (len <= internalSize() - prefixSpace()) {
@@ -39,7 +51,7 @@ namespace libtun {
 
     uint32_t shift(int len) {
       int diff = _data - _internal;
-      if (len >= -diff && len <= (int64_t)_size) {
+      if (len >= -diff && len <= (int32_t)_size) {
         _data += len;
         _size -= len;
       }
@@ -93,17 +105,16 @@ namespace libtun {
     }
 
   private:
-    uint32_t _bufferSize;
     uint32_t _buffersPerChunk;
     std::mutex _locker;
     std::list<uint8_t*> _memoryChunks;
     std::stack<uint8_t*> _available;
 
     uint8_t* _allocChunk() {
-      auto data = new uint8_t[_bufferSize * _buffersPerChunk];
+      auto data = new uint8_t[bufferSize * _buffersPerChunk];
       _memoryChunks.push_back(data);
       for (int i = 0; i < _buffersPerChunk; i++) {
-        _available.push(data + i * _bufferSize);
+        _available.push(data + i * bufferSize);
       }
       return data;
     }

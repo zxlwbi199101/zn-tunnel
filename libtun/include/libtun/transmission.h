@@ -3,7 +3,6 @@
 
 #include "./transmission/Command.h"
 #include "./transmission/Cryptor.h"
-#include "./transmission/Session.h"
-#include "./transmission/Communicator.h"
+#include "./transmission/Rpc.h"
 
 #endif

@@ -8,23 +8,24 @@ namespace libtun {
 namespace transmission {
 
   enum Command: uint8_t {
-    // for client
-    REQ_AUTH,
-
-    // for server
-    RES_AUTH_SECCESS,
-
-    // for both
+    REQUEST,
+    REPLY,
     TRANSMIT,
-    TERMINATE,
-    PING,
-    PONG,
   };
 
-  enum TerminateReason: uint8_t {
-    EXIT,
-    NOT_AVAILABLE,
-    AUTH_FAILED,
+  enum RpcType: uint8_t {
+    CONNECT,
+    PING,
+    DISCONNECT,
+    ERROR,
+  };
+
+  enum RpcErrorType: uint8_t {
+    SUCCESS,
+    INVALID_INPUT,
+    WRONG_CREDENTIAL,
+    TOO_MANY_CONNECTION,
+    NOT_CONNECTED,
   };
 
 } // namespace transmission
