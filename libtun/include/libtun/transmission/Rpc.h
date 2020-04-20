@@ -11,7 +11,7 @@
 #include <boost/endian/conversion.hpp>
 #include <boost/system/error_code.hpp>
 #include "../BufferPool.h"
-#include "./Command.h"
+#include "./constant.h"
 #include "./Cryptor.h"
 
 namespace libtun {
@@ -27,7 +27,7 @@ namespace transmission {
 
   /* A RPC PACKET
   ---------------------------------------------------
-  |  Command  |          ID           |    CONTENT
+  |  Command  |          ID           |    CONTENT...
   ---------------------------------------------------
   */
 
@@ -55,7 +55,7 @@ namespace transmission {
       _cryptor->decrypt(data + 1, buf.size() - 1);
       uint8_t type = data[0];
       uint16_t id = endian::big_to_native(*((uint16_t*)(data + 1)));
-      buf.shift(3);
+      buf.moveFrontBoundary(3);
 
       if (type == Command::REQUEST && _replying.find({from, id}) == _replying.end()) {
         ControlBlock* control = _pool.malloc();
@@ -72,7 +72,7 @@ namespace transmission {
             _pool.free(control);
             return;
           }
-          control->buffer.shift(-3);
+          control->buffer.moveFrontBoundary(-3);
 
           auto inputData = control->buffer.data();
           inputData[0] = Command::REPLY;
@@ -103,7 +103,7 @@ namespace transmission {
 
       uint16_t id = _nextId();
 
-      buf.shift(-3);
+      buf.moveFrontBoundary(-3);
       auto data = buf.data();
       data[0] = Command::REQUEST;
       *((uint16_t*)(data + 1)) = endian::native_to_big(id);

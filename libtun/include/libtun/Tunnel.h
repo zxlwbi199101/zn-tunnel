@@ -3,50 +3,42 @@
 
 #include <stdint.h>
 #include <string>
-#include <boost/asio/buffer.hpp>
 #include <fmt/core.h>
 #include <libtun/logger.h>
+#include <libtun/BufferPool.h>
+
+#ifdef __APPLE__
+  #include "./impl/Tunnel/Tunnel_darwin.h"
+#endif
 
 namespace libtun {
 
-  using boost::asio::const_buffer;
-  using boost::asio::mutable_buffer;
-
-  const uint16_t MTU = 1500;
-
   class Tunnel {
   public:
-    std::string ifName;
-    uint8_t readBuffer[MTU];
-
     bool open() {
       try {
-        _openTun();
+        _impl.openTunnel();
       } catch (const std::exception& err) {
-        fd = -1;
-        fatal << err.what();
+        LOG_FATAL << err.what();
+        _impl.close();
         return false;
       }
-      info << fmt::format("tunnel [{}] is opened.", ifName);
+      LOG_INFO << fmt::format("tunnel [{}] is opened.", _impl.ifName);
       return true;
-    };
-
-    bool isReady() {
-      return fd > 0;
     }
 
-    mutable_buffer read(mutable_buffer buffer);
-    uint16_t read();
-    uint16_t write(const const_buffer& buffer);
+    Buffer read(const Buffer& buf) {
+      return _impl.read(buf);
+    }
+
+    int write(const Buffer& buf) {
+      return _impl.write(buf);
+    }
 
   private:
-    int fd = -1;
-    void _openTun();
+    impl::TunnelImpl _impl;
   };
 }
 
-#ifdef __APPLE__
-  #include "./impl/Tunnel/tun_darwin.h"
-#endif
 
 #endif

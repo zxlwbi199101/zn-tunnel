@@ -44,9 +44,15 @@ namespace transmission {
     void encrypt(void* data, uint32_t size) {
       _encryption.ProcessData((Byte*)data, (Byte*)data, size);
     }
+    void encrypt(void* src, void* dest, uint32_t size) {
+      _encryption.ProcessData((Byte*)dest, (Byte*)src, size);
+    }
 
     void decrypt(void* data, uint32_t size) {
       _decryption.ProcessData((Byte*)data, (Byte*)data, size);
+    }
+    void decrypt(void* src, void* dest, uint32_t size) {
+      _decryption.ProcessData((Byte*)dest, (Byte*)src, size);
     }
 
   private:

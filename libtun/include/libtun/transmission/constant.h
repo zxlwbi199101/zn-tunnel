@@ -1,5 +1,5 @@
-#ifndef LIBTUN_TRANSMISSION_COMMAND_INCLUDED
-#define LIBTUN_TRANSMISSION_COMMAND_INCLUDED
+#ifndef LIBTUN_TRANSMISSION_CONSTANT_INCLUDED
+#define LIBTUN_TRANSMISSION_CONSTANT_INCLUDED
 
 #include <boost/asio/ip/address_v4.hpp>
 #include <string>
@@ -17,7 +17,6 @@ namespace transmission {
     CONNECT,
     PING,
     DISCONNECT,
-    ERROR,
   };
 
   enum RpcErrorType: uint8_t {
@@ -26,6 +25,14 @@ namespace transmission {
     WRONG_CREDENTIAL,
     TOO_MANY_CONNECTION,
     NOT_CONNECTED,
+    NETWORK_ISSUE,
+  };
+
+  enum SessionStatus: uint8_t {
+    IDLE,
+    CONNECTED,
+    DISCONNECTED,
+    ERROR,
   };
 
 } // namespace transmission

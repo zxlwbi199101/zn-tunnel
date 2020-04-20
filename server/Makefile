@@ -16,6 +16,7 @@ LDFLAGS += \
 	-lcryptopp
 
 SOURCES = $(wildcard *.cc)
+# SOURCES = dump.cc
 OBJS = $(addsuffix .o, $(basename $(SOURCES)))
 
 compile: $(OBJS)

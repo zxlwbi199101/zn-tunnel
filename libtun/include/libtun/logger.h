@@ -13,12 +13,12 @@
 #include <fmt/core.h>
 #include <libtun/Exception.h>
 
-#define trace BOOST_LOG_TRIVIAL(trace)
-#define debug BOOST_LOG_TRIVIAL(debug)
-#define info BOOST_LOG_TRIVIAL(info)
-#define warning BOOST_LOG_TRIVIAL(warning)
-#define error BOOST_LOG_TRIVIAL(error)
-#define fatal BOOST_LOG_TRIVIAL(fatal)
+#define LOG_TRACE BOOST_LOG_TRIVIAL(trace)
+#define LOG_DEBUG BOOST_LOG_TRIVIAL(debug)
+#define LOG_INFO BOOST_LOG_TRIVIAL(info)
+#define LOG_WARNING BOOST_LOG_TRIVIAL(warning)
+#define LOG_ERROR BOOST_LOG_TRIVIAL(error)
+#define LOG_FATAL BOOST_LOG_TRIVIAL(fatal)
 
 namespace libtun {
 
@@ -34,12 +34,12 @@ namespace libtun {
     fs::path p(fullPath);
 
     if (!p.is_absolute()) {
-      fatal << "requires an absolute full path.";
+      LOG_FATAL << "requires an absolute full path.";
       throw Exception("requires an absolute full path.");
     }
     if (p.has_parent_path() && !fs::exists(p.parent_path())) {
       fs::create_directories(p.parent_path());
-      info << fmt::format("directory {} not exists, created.", p.parent_path().string());
+      LOG_INFO << fmt::format("directory {} not exists, created.", p.parent_path().string());
     }
   }
 
@@ -72,9 +72,9 @@ namespace libtun {
       this->file.open(fullPath, std::ofstream::binary | std::ofstream::app);
 
       if (!file.is_open()) {
-        error << fmt::format("[{}] binlog [{}] open failed.", debugName, fullPath);
+        LOG_ERROR << fmt::format("[{}] binlog [{}] open failed.", debugName, fullPath);
       } else {
-        info << fmt::format("[{}] binlog file is {}.", debugName, fullPath);
+        LOG_INFO << fmt::format("[{}] binlog file is {}.", debugName, fullPath);
       }
     }
 

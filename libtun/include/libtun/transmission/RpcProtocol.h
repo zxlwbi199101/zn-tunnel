@@ -9,7 +9,7 @@
 #include <boost/endian/conversion.hpp>
 #include <boost/system/error_code.hpp>
 #include "../BufferPool.h"
-#include "./Command.h"
+#include "./constant.h"
 #include "./Rpc.h"
 
 namespace libtun {
@@ -24,49 +24,129 @@ namespace transmission {
   using boost::system::error_code;
 
   /* A RPC PROTOCOL PACKET
-  -----------------------------------------------------------
-  rpc packet...  |    type   |   error   |          len         | data
-  -----------------------------------------------------------
+  (REQUEST)
+  ---------------------------------------------------------------------
+  rpc packet...  |    type   |          len         | data (pairs)
+  ---------------------------------------------------------------------
+
+  (RESPONSE)
+  ---------------------------------------------------------------------
+  rpc packet...  |   error   |          len         | data (pairs)
+  ---------------------------------------------------------------------
   */
 
-  class RpcProtocol: Rpc {
+  class RpcProtocol: public Rpc {
   public:
 
-    // FUNCTION: (username, password) => (error, key, iv)
-    std::function<std::tuple<RpcErrorType, std::string, std::string>(std::string, std::string)> onConnect;
+    // FUNCTION: (endpoint, username, password) => (error, key, iv)
+    std::function<std::tuple<RpcErrorType, std::string, std::string>(udp::endpoint, std::string, std::string)> onConnect;
 
-    // FUNCTION: () => (error)
-    std::function<RpcErrorType()> onPing;
+    // FUNCTION: (endpoint) => (error)
+    std::function<RpcErrorType(udp::endpoint)> onPing;
 
-    // FUNCTION: () => (error)
-    std::function<RpcErrorType()> onDisconnect;
+    // FUNCTION: (endpoint) => (error)
+    std::function<RpcErrorType(udp::endpoint)> onDisconnect;
 
     bool onRequest(Buffer buf, ControlBlock* control) {
-      auto data = buf.data();
-      auto replyBUf = _pool
-      if (data[0] == RpcType::CONNECT) {
+      auto requestType = buf.data()[0];
+      buf.moveFrontBoundary(1);
 
-      } else if (data[0] == RpcType::DISCONNECT) {
-
-      } else if (data[0] == RpcType::PING) {
-
+      if (requestType != RpcType::CONNECT && requestType != RpcType::DISCONNECT && requestType != RpcType::PING) {
+        return false;
       }
-      return false;
+
+      auto replyBuf = _bufferPool->alloc();
+      replyBuf.moveFrontBoundary(10);
+      replyBuf.size(1);
+
+      if (requestType == RpcType::CONNECT) {
+        std::string username = buf.readStringFromFront();
+        std::string password = buf.readStringFromFront();
+        RpcErrorType err;
+        std::string key, iv;
+        std::tie(err, key, iv) = onConnect(control->endpoint, username, password);
+        replyBuf.data()[0] = err;
+        buf.writeStringToBack(key);
+        buf.writeStringToBack(iv);
+      } else if (requestType == RpcType::DISCONNECT) {
+        replyBuf.data()[0] = onDisconnect(control->endpoint);
+      } else if (requestType == RpcType::PING) {
+        replyBuf.data()[0] = onPing(control->endpoint);
+      }
+
+      control->buffer = replyBuf;
+      control->onComplete = [_bufferPool = _bufferPool](error_code err, Buffer completeBuf, ControlBlock* control) {
+        _bufferPool->free(completeBuf);
+      };
+
+      return true;
     }
-    // std::function<bool(Buffer, ControlBlock*)> onRequest;
 
     RpcProtocol(io_context* context, udp::socket* socket, Cryptor* cryptor, BufferPool<1600>* bufferPool):
       Rpc(context, socket, cryptor),
-      _bufferPool(pool) {
+      _bufferPool(bufferPool) {
 
     }
 
-    void connect(const std::string& name, const std::string& password) {
+    void connect(
+      const udp::endpoint& to,
+      const std::string& username,
+      const std::string& password,
+      std::function<void(RpcErrorType, std::string, std::string)> onConnectComplete
+    ) {
+      auto buf = _bufferPool->alloc();
+      buf.moveFrontBoundary(10);
+      buf.size(1);
 
+      buf.data()[0] = RpcType::CONNECT;
+      buf.writeStringToBack(username);
+      buf.writeStringToBack(password);
+
+      send(to, buf, [onConnectComplete, _bufferPool = _bufferPool](error_code err, Buffer replyBuf, ControlBlock* control) {
+        if (err.failed()) {
+          return onConnectComplete(RpcErrorType::NETWORK_ISSUE, "", "");
+        }
+        auto rpcError = replyBuf.data()[0];
+        replyBuf.moveFrontBoundary(1);
+
+        onConnectComplete((RpcErrorType)rpcError, replyBuf.readStringFromFront(), replyBuf.readStringFromFront());
+        _bufferPool->free(control->buffer);
+      });
+    }
+
+    void ping(const udp::endpoint& to, std::function<void(RpcErrorType)> onPingComplete) {
+      auto buf = _bufferPool->alloc();
+      buf.moveFrontBoundary(10);
+      buf.size(1);
+      buf.data()[0] = RpcType::PING;
+
+      send(to, buf, [onPingComplete, _bufferPool = _bufferPool](error_code err, Buffer replyBuf, ControlBlock* control) {
+        if (err.failed()) {
+          return onPingComplete(RpcErrorType::NETWORK_ISSUE);
+        }
+        onPingComplete((RpcErrorType)(replyBuf.data()[0]));
+        _bufferPool->free(control->buffer);
+      });
+    }
+
+    void disconnect(const udp::endpoint& to, std::function<void(RpcErrorType)> onDisconnectComplete) {
+      auto buf = _bufferPool->alloc();
+      buf.moveFrontBoundary(10);
+      buf.size(1);
+      buf.data()[0] = RpcType::DISCONNECT;
+
+      send(to, buf, [onDisconnectComplete, _bufferPool = _bufferPool](error_code err, Buffer replyBuf, ControlBlock* control) {
+        if (err.failed()) {
+          return onDisconnectComplete(RpcErrorType::NETWORK_ISSUE);
+        }
+        onDisconnectComplete((RpcErrorType)(replyBuf.data()[0]));
+        _bufferPool->free(control->buffer);
+      });
     }
 
   private:
-    BufferPool<1600>* _pool;
+    BufferPool<1600>* _bufferPool;
+
   };
 
 } // namespace transmission

@@ -36,7 +36,13 @@ namespace protocol {
 
     Ip4() {}
 
-    Ip4(mutable_buffer buffer) {
+    Ip4(uint8_t* buffer, uint32_t size) {
+      _header = (Header*)buffer;
+      _size = size;
+    }
+
+    template<class Buffer>
+    Ip4(Buffer buffer) {
       _header = (Header*)buffer.data();
       _size = buffer.size();
     }

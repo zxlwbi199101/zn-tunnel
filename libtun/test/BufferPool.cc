@@ -27,33 +27,6 @@ BOOST_AUTO_TEST_SUITE(BufferPool)
       BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 0);
       BOOST_REQUIRE_EQUAL(buf.suffixSpace(), 0);
     }
-    BOOST_AUTO_TEST_CASE(shift_constructor) {
-      TunBuffer other(data, 20);
-      TunBuffer buf(other, 3);
-      BOOST_REQUIRE_EQUAL(buf.data(), data + 3);
-      BOOST_REQUIRE_EQUAL(buf.size(), 17);
-      BOOST_REQUIRE_EQUAL(buf.internal(), data);
-      BOOST_REQUIRE_EQUAL(buf.internalSize(), 20);
-      BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 3);
-      BOOST_REQUIRE_EQUAL(buf.suffixSpace(), 0);
-    }
-
-    BOOST_AUTO_TEST_CASE(shift_position) {
-      TunBuffer buf(data, 20);
-      BOOST_REQUIRE_EQUAL(buf.shift(3), 17);
-      BOOST_REQUIRE_EQUAL(buf.data(), data + 3);
-      BOOST_REQUIRE_EQUAL(buf.size(), 17);
-      BOOST_REQUIRE_EQUAL(buf.internal(), data);
-      BOOST_REQUIRE_EQUAL(buf.internalSize(), 20);
-      BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 3);
-      BOOST_REQUIRE_EQUAL(buf.suffixSpace(), 0);
-
-      BOOST_REQUIRE_EQUAL(buf.shift(17), 0);
-      BOOST_REQUIRE_EQUAL(buf.shift(-20), 20);
-      BOOST_REQUIRE_EQUAL(buf.shift(-1), 20);
-      BOOST_REQUIRE_EQUAL(buf.shift(21), 20);
-      BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 0);
-    }
 
     BOOST_AUTO_TEST_CASE(change_size) {
       TunBuffer buf(data, 20);
@@ -64,6 +37,57 @@ BOOST_AUTO_TEST_SUITE(BufferPool)
       BOOST_REQUIRE_EQUAL(buf.internalSize(), 20);
       BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 0);
       BOOST_REQUIRE_EQUAL(buf.suffixSpace(), 17);
+    }
+
+    BOOST_AUTO_TEST_CASE(shift) {
+      TunBuffer buf(data, 20);
+      buf.size(10);
+      BOOST_REQUIRE_EQUAL(buf.shift(3), 10);
+      BOOST_REQUIRE_EQUAL(buf.data() - data, 3);
+      BOOST_REQUIRE_EQUAL(buf.data(), data + 3);
+      BOOST_REQUIRE_EQUAL(buf.size(), 10);
+
+      BOOST_REQUIRE_EQUAL(buf.shift(8), 10);
+      BOOST_REQUIRE_EQUAL(buf.data(), data + 3);
+      BOOST_REQUIRE_EQUAL(buf.size(), 10);
+
+      BOOST_REQUIRE_EQUAL(buf.shift(-2), 10);
+      BOOST_REQUIRE_EQUAL(buf.data(), data + 1);
+      BOOST_REQUIRE_EQUAL(buf.size(), 10);
+    }
+
+    BOOST_AUTO_TEST_CASE(move_front_boundary) {
+      TunBuffer buf(data, 20);
+      BOOST_REQUIRE_EQUAL(buf.moveFrontBoundary(3), 17);
+      BOOST_REQUIRE_EQUAL(buf.data(), data + 3);
+      BOOST_REQUIRE_EQUAL(buf.size(), 17);
+      BOOST_REQUIRE_EQUAL(buf.internal(), data);
+      BOOST_REQUIRE_EQUAL(buf.internalSize(), 20);
+      BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 3);
+      BOOST_REQUIRE_EQUAL(buf.suffixSpace(), 0);
+
+      BOOST_REQUIRE_EQUAL(buf.moveFrontBoundary(17), 0);
+      BOOST_REQUIRE_EQUAL(buf.moveFrontBoundary(-20), 20);
+      BOOST_REQUIRE_EQUAL(buf.moveFrontBoundary(-1), 20);
+      BOOST_REQUIRE_EQUAL(buf.moveFrontBoundary(21), 20);
+      BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 0);
+    }
+
+    BOOST_AUTO_TEST_CASE(move_back_boundary) {
+      TunBuffer buf(data, 20);
+      BOOST_REQUIRE_EQUAL(buf.moveBackBoundary(-3), 17);
+      BOOST_REQUIRE_EQUAL(buf.data(), data);
+      BOOST_REQUIRE_EQUAL(buf.size(), 17);
+      BOOST_REQUIRE_EQUAL(buf.internal(), data);
+      BOOST_REQUIRE_EQUAL(buf.internalSize(), 20);
+      BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 0);
+      BOOST_REQUIRE_EQUAL(buf.suffixSpace(), 3);
+
+      BOOST_REQUIRE_EQUAL(buf.moveBackBoundary(-17), 0);
+      BOOST_REQUIRE_EQUAL(buf.moveBackBoundary(20), 20);
+      BOOST_REQUIRE_EQUAL(buf.moveBackBoundary(1), 20);
+      BOOST_REQUIRE_EQUAL(buf.moveBackBoundary(-21), 20);
+      BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 0);
     }
 
     BOOST_AUTO_TEST_CASE(to_const_buffer) {

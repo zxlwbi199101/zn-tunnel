@@ -1,27 +1,24 @@
-#include <vector>
-#include <net/bpf.h>
-#include <net/ethernet.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-
-#include <boost/asio.hpp>
-#include <libtun/logger.h>
-#include <libtun/protocol/ip4.h>
-
-namespace asio = boost::asio;
-using asio::mutable_buffer;
-using asio::detail::socket_addr_type;
-using asio::ip::udp;
+#include <libtun/BufferPool.h>
+#include "TunnelServer.h"
 
 int main() {
+
+  libtun::BufferPool<1600> pool;
+  znserver::TunnelServerConfig config = {
+    .listenPort = 8080,
+    .portFrom = 64335,
+    .portTo = 64995,
+    .maxSessions = 10,
+    .key = "1234567890123456",
+    .iv = "6543210987654321",
+  };
+  znserver::TunnelServer server(config, &pool);
+
   try {
-    asio::io_context context;
-    // asio::ip::udp::udp_server server(io_context);
-    // io_context.run();
-  }
-  catch (std::exception& e)
-  {
-    std::cerr << e.what() << std::endl;
+    server.start();
+  } catch (std::exception& e) {
+    LOG_FATAL << e.what();
+    return 1;
   }
 
   return 0;

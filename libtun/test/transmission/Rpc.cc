@@ -32,7 +32,7 @@ BOOST_AUTO_TEST_SUITE(protocol_transmission_rpc)
       _rpc.onRequest = std::bind(&Communicator::onRequest, this, std::placeholders::_1, std::placeholders::_2);
 
       _receiveBuf = _pool->alloc();
-      _receiveBuf.shift(10);
+      _receiveBuf.moveFrontBoundary(10);
       _socket.async_receive_from(
         _receiveBuf.toMutableBuffer(),
         _endpoint,
@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_SUITE(protocol_transmission_rpc)
       requests.push_back(buf);
 
       auto buffer = _pool->alloc();
-      buffer.shift(10);
+      buffer.moveFrontBoundary(10);
       buffer.data()[0] = 3;
       buffer.data()[1] = 4;
       buffer.size(2);
@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_SUITE(protocol_transmission_rpc)
 
     void send() {
       auto buffer = _pool->alloc();
-      buffer.shift(10);
+      buffer.moveFrontBoundary(10);
       buffer.data()[0] = 1;
       buffer.data()[1] = 2;
       buffer.size(2);
