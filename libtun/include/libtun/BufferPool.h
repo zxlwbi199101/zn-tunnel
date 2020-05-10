@@ -99,7 +99,7 @@ namespace libtun {
     }
 
     // write content
-    bool writeBuffer(const void* buf, uint32_t len, uint32_t from) {
+    bool writeBuffer(const void* buf, uint16_t len, uint32_t from) {
       if (from + len + 2 >= size() + suffixSpace()) {
         return false;
       }
@@ -110,7 +110,7 @@ namespace libtun {
       std::memcpy(_data + from + 2, buf, len);
       return true;
     }
-    bool writeBufferToBack(const void* buf, uint32_t len) {
+    bool writeBufferToBack(const void* buf, uint16_t len) {
       return writeBuffer(buf, len, size());
     }
 

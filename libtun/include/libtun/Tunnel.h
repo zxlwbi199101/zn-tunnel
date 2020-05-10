@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <string>
 #include <fmt/core.h>
-#include <libtun/logger.h>
-#include <libtun/BufferPool.h>
+#include "./logger.h"
+#include "./BufferPool.h"
 
 #ifdef __APPLE__
   #include "./impl/Tunnel/Tunnel_darwin.h"

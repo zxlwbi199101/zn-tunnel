@@ -11,7 +11,7 @@
 #include <boost/log/trivial.hpp>
 #include <boost/filesystem.hpp>
 #include <fmt/core.h>
-#include <libtun/Exception.h>
+#include "./Exception.h"
 
 #define LOG_TRACE BOOST_LOG_TRIVIAL(trace)
 #define LOG_DEBUG BOOST_LOG_TRIVIAL(debug)

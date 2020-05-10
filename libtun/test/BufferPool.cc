@@ -6,7 +6,7 @@ using TunBuffer = libtun::Buffer;
 BOOST_AUTO_TEST_SUITE(BufferPool)
 
   BOOST_AUTO_TEST_SUITE(Buffer)
-    auto data = new uint8_t[20];
+    uint8_t data[20];
 
     BOOST_AUTO_TEST_CASE(default_constructor) {
       TunBuffer buf(data, 20);
@@ -88,6 +88,54 @@ BOOST_AUTO_TEST_SUITE(BufferPool)
       BOOST_REQUIRE_EQUAL(buf.moveBackBoundary(1), 20);
       BOOST_REQUIRE_EQUAL(buf.moveBackBoundary(-21), 20);
       BOOST_REQUIRE_EQUAL(buf.prefixSpace(), 0);
+    }
+
+    BOOST_AUTO_TEST_CASE(write_read_buffer) {
+      TunBuffer buf(data, 20);
+      buf.size(0);
+      uint8_t content[5] = {1, 2, 3, 4, 5};
+
+      BOOST_REQUIRE_EQUAL(buf.writeBuffer(content, 5, 0), true);
+      BOOST_REQUIRE_EQUAL(buf.size(), 7);
+      BOOST_REQUIRE_EQUAL(data[0], 0);
+      BOOST_REQUIRE_EQUAL(data[1], 5);
+      BOOST_REQUIRE_EQUAL_COLLECTIONS(content, content + 5, data + 2, data + 7);
+      
+      auto readContent = buf.readBuffer(0);
+      BOOST_REQUIRE_EQUAL(readContent.size(), 5);
+      BOOST_REQUIRE_EQUAL_COLLECTIONS(content, content + 5, (uint8_t*)readContent.data(), (uint8_t*)readContent.data() + 5);
+
+      BOOST_REQUIRE_EQUAL(buf.writeBuffer(content, 5, 16), false);
+    }
+
+    BOOST_AUTO_TEST_CASE(write_read_string) {
+      TunBuffer buf(data, 20);
+      buf.size(0);
+      std::string content = "hello";
+
+      BOOST_REQUIRE_EQUAL(buf.writeString(content, 0), true);
+      BOOST_REQUIRE_EQUAL(buf.size(), 7);
+      BOOST_REQUIRE_EQUAL(data[0], 0);
+      BOOST_REQUIRE_EQUAL(data[1], 5);
+      
+      std::string readContent = buf.readString(0);
+      BOOST_REQUIRE_EQUAL(readContent, content);
+
+      BOOST_REQUIRE_EQUAL(buf.writeString(content, 16), false);
+    }
+
+    BOOST_AUTO_TEST_CASE(write_read_front_back) {
+      TunBuffer buf(data, 20);
+      buf.size(0);
+      std::string content = "hello";
+      
+      BOOST_REQUIRE_EQUAL(buf.writeStringToBack(content), true);
+      BOOST_REQUIRE_EQUAL(buf.writeStringToBack(content), true);
+      BOOST_REQUIRE_EQUAL(buf.size(), 14);
+      BOOST_REQUIRE_EQUAL(buf.readStringFromFront(), content);
+      BOOST_REQUIRE_EQUAL(buf.readStringFromFront(), content);
+      BOOST_REQUIRE_EQUAL(buf.size(), 0);
+      BOOST_REQUIRE_EQUAL(buf.readStringFromFront(), "");
     }
 
     BOOST_AUTO_TEST_CASE(to_const_buffer) {

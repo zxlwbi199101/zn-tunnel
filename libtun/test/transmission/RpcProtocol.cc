@@ -4,14 +4,16 @@
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/system/error_code.hpp>
+#include <fmt/core.h>
 #include <libtun/transmission.h>
 
-BOOST_AUTO_TEST_SUITE(protocol_transmission_rpc)
+BOOST_AUTO_TEST_SUITE(protocol_transmission_rpc_protocol)
 
   namespace asio = boost::asio;
   using asio::ip::udp;
   using libtun::transmission::Cryptor;
-  using libtun::transmission::Rpc;
+  using libtun::transmission::RpcProtocol;
+  using libtun::transmission::RpcErrorType;
   using libtun::BufferPool;
 
   class Communicator {
@@ -29,23 +31,19 @@ BOOST_AUTO_TEST_SUITE(protocol_transmission_rpc)
       _cryptor(cryptor),
       _pool(pool),
       _socket(*context, udp::endpoint(udp::v4(), port)),
-      _rpc(_context, &_socket, _cryptor, 3) {
+      _rpc(_context, &_socket, _cryptor, pool, 3) {
 
-      _rpc.onRequest = [&](libtun::Buffer buf, Rpc::ControlBlock* control) {
-        requests.push_back(std::string((const char*)buf.data(), buf.size()));
-
-        auto buffer = _pool->alloc();
-        buffer.moveFrontBoundary(10);
-        buffer.data()[0] = 3;
-        buffer.data()[1] = 4;
-        buffer.size(2);
-
-        control->buffer = buffer;
-        control->onComplete = [&](boost::system::error_code err, libtun::Buffer buf, Rpc::ControlBlock* control) {
-          _pool->free(buf);
-        };
-
-        return true;
+      _rpc.onConnect = [&](udp::endpoint from, std::string name, std::string pwd) {
+        requests.push_back(fmt::format("connect:{}_{}", name, pwd));
+        return std::make_tuple(RpcErrorType::SUCCESS, "key", "iv");
+      };
+      _rpc.onPing = [&](udp::endpoint from) {
+        requests.push_back("ping");
+        return RpcErrorType::INVALID_INPUT;
+      };
+      _rpc.onDisconnect = [&](udp::endpoint from) {
+        requests.push_back("disconnect");
+        return RpcErrorType::SUCCESS;
       };
 
       socketBuf = libtun::Buffer(internalBuf, 1600);
@@ -71,17 +69,14 @@ BOOST_AUTO_TEST_SUITE(protocol_transmission_rpc)
     }
 
     void send() {
-      auto buffer = _pool->alloc();
-      buffer.moveFrontBoundary(10);
-      buffer.data()[0] = 1;
-      buffer.data()[1] = 2;
-      buffer.size(2);
-
-      _rpc.send(udp::endpoint(udp::v4(), 10060), buffer, [&](boost::system::error_code err, libtun::Buffer buf, Rpc::ControlBlock* control) {
-        if (!err.failed()) {
-          replies.push_back(std::string((const char*)buf.data(), buf.size()));
-        }
-        _pool->free(control->buffer);
+      _rpc.connect(udp::endpoint(udp::v4(), 10060), "name", "pwd", [&](RpcErrorType err, std::string key, std::string iv) {
+        replies.push_back(fmt::format("connect:{}_{}_{}", (uint8_t)err, key, iv));
+      });
+      _rpc.ping(udp::endpoint(udp::v4(), 10060), [&](RpcErrorType err) {
+        replies.push_back(fmt::format("ping:{}", (uint8_t)err));
+      });
+      _rpc.disconnect(udp::endpoint(udp::v4(), 10060), [&](RpcErrorType err) {
+        replies.push_back(fmt::format("disconnect:{}", (uint8_t)err));
       });
     }
 
@@ -90,11 +85,11 @@ BOOST_AUTO_TEST_SUITE(protocol_transmission_rpc)
     Cryptor* _cryptor;
     BufferPool<1600>* _pool;
     udp::socket _socket;
-    Rpc _rpc;
+    RpcProtocol _rpc;
 
   };
 
-  BOOST_AUTO_TEST_CASE(communication) {
+  BOOST_AUTO_TEST_CASE(rpc_protocol_communication) {
     asio::io_context context;
     Cryptor cryptor;
     BufferPool<1600> pool;
@@ -111,18 +106,22 @@ BOOST_AUTO_TEST_SUITE(protocol_transmission_rpc)
 
     context.run();
 
-    BOOST_REQUIRE_EQUAL(server.socketReceives.size(), 1);
-    BOOST_REQUIRE_EQUAL(server.socketReceives[0].size(), 5);
+    // BOOST_REQUIRE_EQUAL(server.socketReceives.size(), 1);
+    // BOOST_REQUIRE_EQUAL(server.socketReceives[0].size(), 5);
 
-    BOOST_REQUIRE_EQUAL(client.socketReceives.size(), 2);
-    BOOST_REQUIRE_EQUAL(client.socketReceives[0].size(), 5);
-    BOOST_REQUIRE_EQUAL(client.socketReceives[0], client.socketReceives[1]);
+    // BOOST_REQUIRE_EQUAL(client.socketReceives.size(), 2);
+    // BOOST_REQUIRE_EQUAL(client.socketReceives[0].size(), 5);
+    // BOOST_REQUIRE_EQUAL(client.socketReceives[0], client.socketReceives[1]);
 
-    BOOST_REQUIRE_EQUAL(server.requests.size(), 1);
-    BOOST_REQUIRE_EQUAL(server.requests[0], "\1\2");
+    BOOST_REQUIRE_EQUAL(server.requests.size(), 3);
+    BOOST_REQUIRE_EQUAL(server.requests[0], "connect:name_pwd");
+    BOOST_REQUIRE_EQUAL(server.requests[1], "ping");
+    BOOST_REQUIRE_EQUAL(server.requests[2], "disconnect");
 
-    BOOST_REQUIRE_EQUAL(client.replies.size(), 1);
-    BOOST_REQUIRE_EQUAL(client.replies[0], "\3\4");
+    BOOST_REQUIRE_EQUAL(client.replies.size(), 3);
+    BOOST_REQUIRE_EQUAL(client.replies[0], "connect:0_key_iv");
+    BOOST_REQUIRE_EQUAL(client.replies[1], "ping:1");
+    BOOST_REQUIRE_EQUAL(client.replies[2], "disconnect:0");
 
     BOOST_REQUIRE_EQUAL(pool.consumedCount(), 0);
     BOOST_REQUIRE_EQUAL(pool.availableCount(), 32);

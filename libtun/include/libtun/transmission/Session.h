@@ -1,13 +1,8 @@
 #ifndef LIBTUN_TRANSMISSION_SESSION_INCLUDED
 #define LIBTUN_TRANSMISSION_SESSION_INCLUDED
 
-#include <string>
-#include <vector>
-#include <array>
-#include <unordered_map>
 #include <chrono>
 #include <boost/asio/ip/udp.hpp>
-#include "./constant.h"
 #include "./Cryptor.h"
 
 namespace libtun {
@@ -27,12 +22,24 @@ namespace transmission {
     SessionStatus status = SessionStatus::IDLE;
     RpcErrorType error;
 
-    Session(udp::endpoint ep, uint16_t id): endpoint(ep), clientId(id) {}
-    Session(uint16_t id): clientId(id) {}
     Session() {}
 
-    bool isConnect() {
+    bool isConnected() {
       return status == SessionStatus::CONNECTED;
+    }
+
+    bool isIdle() {
+      return status == SessionStatus::IDLE;
+    }
+
+    void reset(uint16_t id, udp::endpoint from) {
+      clientId = id;
+      cryptor = Cryptor();
+      endpoint = from;
+      lastActiveAt = system_clock::now();
+      status = SessionStatus::CONNECTED;
+      transmittedBytes = 0;
+      error = RpcErrorType::SUCCESS;
     }
 
     void updateTransmit(int len) {

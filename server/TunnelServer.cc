@@ -6,8 +6,7 @@ namespace znserver {
 
   void TunnelServer::start() {
     _rawSocket.onPacket = std::bind(&TunnelServer::_rawSocketPacketHandler, this, std::placeholders::_1, std::placeholders::_2);
-    _rawSocket.start(serverConfig.portFrom, serverConfig.portTo);
-    boost::asio::post(_context, std::bind(&TunnelServer::_rawSocketLoopHandler, this));
+    _rawSocket.start(&_context, serverConfig.portFrom, serverConfig.portTo);
 
     auto requestBuf = _bufferPool->alloc();
     requestBuf.moveFrontBoundary(50);
@@ -62,7 +61,7 @@ namespace znserver {
     if (
       clientId >= sessions.size() ||
       sessions[clientId].endpoint != _receiveEp ||
-      !sessions[clientId].isConnect() ||
+      !sessions[clientId].isConnected() ||
       ip4.calculateChecksum() != ip4.checksum()
     ) {
       return;
@@ -106,23 +105,16 @@ namespace znserver {
     if (name == "zxl" && password == "457348") {
       int16_t id = -1;
       for (int i = 0; i < sessions.size(); i++) {
-        if (sessions[i].status == SessionStatus::IDLE) {
+        if (sessions[i].isIdle()) {
           id = i;
         }
       }
 
       if (id == -1) {
         id = sessions.size();
-        sessions.push_back(Session(id));
+        sessions.push_back(Session());
       }
-
-      sessions[id].clientId = id;
-      sessions[id].cryptor = Cryptor();
-      sessions[id].endpoint = from;
-      sessions[id].lastActiveAt = system_clock::now();
-      sessions[id].status = SessionStatus::CONNECTED;
-      sessions[id].transmittedBytes = 0;
-      sessions[id].error = RpcErrorType::SUCCESS;
+      sessions[id].reset(id, from);
 
       return {RpcErrorType::SUCCESS, sessions[id].cryptor.key, sessions[id].cryptor.iv};
     }
@@ -131,7 +123,7 @@ namespace znserver {
 
   RpcErrorType TunnelServer::_rpcPingHandler(udp::endpoint from) {
     for (int i = 0; i < sessions.size(); i++) {
-      if (sessions[i].endpoint == from && sessions[i].status == SessionStatus::CONNECTED) {
+      if (sessions[i].endpoint == from && sessions[i].isConnected()) {
         sessions[i].updateTransmit(0);
         return RpcErrorType::SUCCESS;
       }
@@ -141,17 +133,12 @@ namespace znserver {
 
   RpcErrorType TunnelServer::_rpcDisconnectHandler(udp::endpoint from) {
     for (int i = 0; i < sessions.size(); i++) {
-      if (sessions[i].endpoint == from && sessions[i].status == SessionStatus::CONNECTED) {
+      if (sessions[i].endpoint == from && sessions[i].isConnected()) {
         sessions[i].status = SessionStatus::IDLE;
         return RpcErrorType::SUCCESS;
       }
     }
     return RpcErrorType::NOT_CONNECTED;
-  }
-
-  void TunnelServer::_rawSocketLoopHandler() {
-    _rawSocket.read();
-    boost::asio::post(_context, std::bind(&TunnelServer::_rawSocketLoopHandler, this));
   }
 
   void TunnelServer::_rawSocketPacketHandler(uint8_t* data, uint32_t size) {
@@ -161,7 +148,7 @@ namespace znserver {
     if (ip.protocol() == Ip4::Protocol::TCP) {
       Tcp tcp(ip);
       auto conn = tcpNapt.find(ip.sourceIP(), tcp.sourcePort(), tcp.destPort());
-      if (!conn || sessions[conn->clientID].status != SessionStatus::CONNECTED) {
+      if (!conn || !sessions[conn->clientID].isConnected()) {
         return;
       }
       clientId = conn->clientID;
@@ -169,7 +156,7 @@ namespace znserver {
     } else if (ip.protocol() == Ip4::Protocol::UDP) {
       Udp udp(ip);
       auto conn = udpNapt.find(ip.sourceIP(), udp.sourcePort(), udp.destPort());
-      if (!conn || sessions[conn->clientID].status != SessionStatus::CONNECTED) {
+      if (!conn || !sessions[conn->clientID].isConnected()) {
         return;
       }
       clientId = conn->clientID;
@@ -184,10 +171,10 @@ namespace znserver {
     buf.size(size + 1);
 
     sessions[clientId].cryptor.encrypt(data, buf.data() + 1, size);
-    _socket.async_send_to(buf.toMutableBuffer(), sessions[clientId].endpoint, [buf, pool = _bufferPool](
+    _socket.async_send_to(buf.toMutableBuffer(), sessions[clientId].endpoint, [&, buf](
       const error_code& sendErr, std::size_t transfered
     ) {
-      pool->free(buf);
+      _bufferPool->free(buf);
     });
   }
 

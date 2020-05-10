@@ -32,4 +32,21 @@ BOOST_AUTO_TEST_SUITE(protocol_transmission_cryptor)
     BOOST_REQUIRE_EQUAL(str2, data);
   }
 
+  BOOST_AUTO_TEST_CASE(cryptor_reuse) {
+    std::string str1(data);
+    std::string str2(data);
+    libtun::transmission::Cryptor cryptor;
+
+    cryptor.encrypt((void*)(str1.data()), str1.size());
+    cryptor.encrypt((void*)(str2.data()), str2.size());
+
+    BOOST_REQUIRE_EQUAL(str1, str2);
+
+    cryptor.decrypt((void*)(str1.data()), str1.size());
+    cryptor.decrypt((void*)(str2.data()), str2.size());
+
+    BOOST_REQUIRE_EQUAL(str1, str2);
+    BOOST_REQUIRE_EQUAL(str1, data);
+  }
+
 BOOST_AUTO_TEST_SUITE_END()

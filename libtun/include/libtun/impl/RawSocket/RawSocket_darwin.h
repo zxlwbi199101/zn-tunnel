@@ -17,12 +17,11 @@
 #include <libtun/Exception.h>
 #include <libtun/BufferPool.h>
 #include <libtun/RawSocket.h>
-#include "InterfaceInfo.h"
+#include "./InterfaceInfo.h"
 
 namespace libtun {
 namespace impl {
 
-  // using Interface
   const int ETHER_HEADER_LEN = sizeof(u_char) * 12 + sizeof(u_short);
 
   class RawSocketImpl {
@@ -31,7 +30,7 @@ namespace impl {
     std::vector<InterfaceInfo> getInterfaces() {
       ifaddrs* ifaddr;
       if (getifaddrs(&ifaddr) == -1) {
-        throw libtun::Exception(fmt::format("rawsocket getifaddrs failed: ", strerror(errno)));
+        throw libtun::Exception(fmt::format("raw socket getifaddrs failed: ", strerror(errno)));
       }
 
       char host[NI_MAXHOST];
@@ -48,7 +47,7 @@ namespace impl {
         }
 
         if (getnameinfo(cur->ifa_addr, sizeof(sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST) == -1) {
-          throw libtun::Exception(fmt::format("rawsocket getnameinfo failed: ", strerror(errno)));
+          throw libtun::Exception(fmt::format("raw socket getnameinfo failed: ", strerror(errno)));
         }
         ifs.push_back({
           .name = std::string(cur->ifa_name),
@@ -83,25 +82,34 @@ namespace impl {
       _buf = new uint8_t[_bufLen];
     }
 
-    bool opened() {
-      return _fd > 0;
-    }
-
     void close() {
       ::close(_fd);
       _fd = -1;
       delete[] _buf;
     }
 
-    int read(std::function<void(uint8_t*, uint32_t)> onPacket) {
-      int n = 0;
-      if (!opened() || ioctl(_fd, FIONREAD, &n) == -1 || n < 1) {
-        return 0;
+    int read() {
+      if (!opened()) {
+        throw Exception("raw socket is not open");
       }
+      return (_readableLen = ::read(_fd, _buf, _bufLen));
+    }
 
-      n = ::read(_fd, _buf, _bufLen);
+    int write(uint8_t* data, uint32_t size) {
+      return ::write(_fd, data, size);
+    }
 
-      for (auto cur = _buf; cur < _buf + n;) {
+    bool opened() {
+      return _fd > 0;
+    }
+    bool consumable() {
+      return _readableLen > 0;
+    }
+
+    void consume(std::function<void(uint8_t*, uint32_t)> onPacket) {
+      if (!consumable()) return;
+
+      for (auto cur = _buf; cur < _buf + _readableLen;) {
         bpf_hdr* bpfHeader = (bpf_hdr*)cur;
         ether_header* etherHeader = (ether_header*)(cur + bpfHeader->bh_hdrlen);
         auto ipData = cur + bpfHeader->bh_hdrlen + ETHER_HEADER_LEN;
@@ -136,18 +144,14 @@ namespace impl {
         onPacket(ipData, ipSize);
         cur += BPF_WORDALIGN(bpfHeader->bh_hdrlen + bpfHeader->bh_caplen);
       }
-
-      return n;
-    }
-
-    int write(uint8_t* data, uint32_t size) {
-      return ::write(_fd, data, size);
+      _readableLen = 0;
     }
 
   private:
     int _fd = -1;
     int _bufLen = 0;
     uint8_t* _buf;
+    int _readableLen = 0;
 
   };
 

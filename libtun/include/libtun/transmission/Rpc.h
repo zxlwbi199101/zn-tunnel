@@ -10,6 +10,7 @@
 #include <boost/pool/object_pool.hpp>
 #include <boost/endian/conversion.hpp>
 #include <boost/system/error_code.hpp>
+#include "../logger.h"
 #include "../BufferPool.h"
 #include "./constant.h"
 #include "./Cryptor.h"
@@ -45,7 +46,8 @@ namespace transmission {
 
     std::function<bool(Buffer, ControlBlock*)> onRequest;
 
-    Rpc(io_context* context, udp::socket* socket, Cryptor* cryptor):
+    Rpc(io_context* context, udp::socket* socket, Cryptor* cryptor, uint16_t retry = 10):
+      _retry(retry),
       _context(context),
       _socket(socket),
       _cryptor(cryptor) {}
@@ -57,14 +59,18 @@ namespace transmission {
       uint16_t id = endian::big_to_native(*((uint16_t*)(data + 1)));
       buf.moveFrontBoundary(3);
 
+      LOG_DEBUG << fmt::format("RAW_RPC feed: type {}, #{} len {}", type, id, buf.size() + 3);
+
       if (type == Command::REQUEST && _replying.find({from, id}) == _replying.end()) {
         ControlBlock* control = _pool.malloc();
-        control->remain = 10;
+        control->remain = _retry;
         control->timer = steady_timer(*_context);
         control->endpoint = from;
         control->id = id;
         control->buffer = buf;
         control->onComplete = nullptr;
+
+        LOG_DEBUG << fmt::format("RAW_RPC request: #{} len {}", id, buf.size() + 3);
 
         if (onRequest(buf, control)) {
           if (control->buffer.prefixSpace() < 3) {
@@ -85,6 +91,8 @@ namespace transmission {
           _pool.free(control);
         }
       } else if (type == Command::REPLY && _requesting.find(id) != _requesting.end()) {
+        LOG_DEBUG << fmt::format("RAW_RPC reply: #{} len {}", id, buf.size() + 3);
+
         auto it = _requesting.find(id);
         it->second->onComplete(error_code(), buf, it->second);
         it->second->remain = 0;
@@ -110,12 +118,14 @@ namespace transmission {
       _cryptor->encrypt(data + 1, buf.size() - 1);
 
       ControlBlock* control = _pool.malloc();
-      control->remain = 10;
+      control->remain = _retry;
       control->timer = steady_timer(*_context);
       control->endpoint = to;
       control->id = id;
       control->buffer = buf;
       control->onComplete = onComplete;
+
+      LOG_DEBUG << fmt::format("RAW_RPC send: #{} len {}", id, buf.size());
 
       _requesting[id] = control;
       _onRequestTimer(error_code(), control);
@@ -142,6 +152,7 @@ namespace transmission {
     };
 
     uint16_t _id = 1;
+    uint16_t _retry;
     io_context* _context;
     udp::socket* _socket;
     Cryptor* _cryptor;
@@ -169,7 +180,7 @@ namespace transmission {
       _socket->async_send_to(
         control->buffer.toConstBuffer(),
         control->endpoint,
-        [control, this](const error_code& sendErr, std::size_t transfered) {
+        [&, control](const error_code& sendErr, std::size_t transfered) {
           if (sendErr.failed()) {
             _onReplyTimer(sendErr, control);
           } else {
@@ -195,7 +206,7 @@ namespace transmission {
       _socket->async_send_to(
         control->buffer.toConstBuffer(),
         control->endpoint,
-        [control, this](const error_code& sendErr, std::size_t transfered) {
+        [&, control](const error_code& sendErr, std::size_t transfered) {
           if (sendErr.failed()) {
             _onRequestTimer(sendErr, control);
           } else {

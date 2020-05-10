@@ -22,8 +22,8 @@ ifeq ($(SYSTEM), Darwin)
 else
 endif
 
-# TEST_SOURCES = $(wildcard test/*.cc test/**/*.cc)
-TEST_SOURCES = test/main.cc test/transmission/Rpc.cc
+TEST_SOURCES = $(wildcard test/*.cc test/**/*.cc)
+# TEST_SOURCES = test/main.cc test/transmission/Rpc.cc
 TEST_OBJS = $(patsubst %cc, %o, $(TEST_SOURCES))
 
 test: test-compile
