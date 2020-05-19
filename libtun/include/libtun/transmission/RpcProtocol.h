@@ -1,10 +1,10 @@
-#ifndef LIBTUN_TRANSMISSION_RPC_PROTOCOL_INCLUDED
-#define LIBTUN_TRANSMISSION_RPC_PROTOCOL_INCLUDED
+#pragma once
 
 #include <string>
 #include <functional>
 #include <tuple>
 #include <boost/asio.hpp>
+#include <boost/signals2.hpp>
 #include <boost/pool/object_pool.hpp>
 #include <boost/endian/conversion.hpp>
 #include <boost/system/error_code.hpp>
@@ -18,7 +18,7 @@ namespace libtun {
 namespace transmission {
 
   namespace endian = boost::endian;
-  namespace boostErrc = boost::system::errc;
+  using boost::signals2::signal;
   using boost::asio::steady_timer;
   using boost::asio::io_context;
   using boost::asio::ip::udp;
@@ -38,133 +38,113 @@ namespace transmission {
   class RpcProtocol: public Rpc {
   public:
 
-    // FUNCTION: (endpoint, username, password) => (error, key, iv)
-    std::function<std::tuple<RpcErrorType, std::string, std::string>(udp::endpoint, std::string, std::string)> onConnect;
+    // FUNCTION: (endpoint, username, password)
+    signal<void(IDWithEndpoint, std::string, std::string)> onConnect;
 
-    // FUNCTION: (endpoint) => (error)
-    std::function<RpcErrorType(udp::endpoint)> onPing;
+    // FUNCTION: (endpoint)
+    signal<void(IDWithEndpoint)> onPing;
 
-    // FUNCTION: (endpoint) => (error)
-    std::function<RpcErrorType(udp::endpoint)> onDisconnect;
+    // FUNCTION: (endpoint)
+    signal<void(IDWithEndpoint)> onDisconnect;
 
     RpcProtocol(io_context* context, udp::socket* socket, Cryptor* cryptor, BufferPool<1600>* bufferPool, uint16_t retry = 10):
       Rpc(context, socket, cryptor, retry),
       _bufferPool(bufferPool) {
-      onRequest = std::bind(&RpcProtocol::_requestHandler, this, std::placeholders::_1, std::placeholders::_2);
+      onRequest.connect(std::bind(&RpcProtocol::_requestHandler, this, std::placeholders::_1, std::placeholders::_2));
     }
 
-    void sendJson(const udp::endpoint& to, const json& payload, std::function<void(json)> onReply) {
+    awaitable<json> sendJson(const udp::endpoint& to, const json& payload) {
       auto buf = _bufferPool->alloc();
       buf.moveFrontBoundary(10);
       buf.size(0);
       buf.writeStringToBack(payload.dump());
 
-      LOG_TRACE << fmt::format("RPC send: {}", payload.dump());
+      json replayPayload = { { "error", RpcErrorType::NETWORK_ISSUE } };
 
-      send(to, buf, [&, onReply](error_code err, Buffer replyBuf, ControlBlock* control) {
-        _bufferPool->free(control->buffer);
-
-        if (err.failed()) {
-          LOG_TRACE << fmt::format("RPC send failed: {}", err.message());
-          return onReply({ { "error", RpcErrorType::NETWORK_ISSUE } });
-        }
-
+      try {
+        auto replyBuf = co_await send(to, buf);
         auto replyStr = replyBuf.readStringFromFront();
-        auto replyPayload = json::parse(replyStr, nullptr, false);
+        replyPayload = json::parse(replyStr, nullptr, false);
+        LOG_TRACE << fmt::format("RPC send successful, request: {}, reply({}): {}", payload.dump(), replyStr.size(), replyStr);
+      } catch(std::exception ex) {
+        LOG_ERROR << fmt::format("RPC send failed, request: {}, error: {}", payload.dump(), ex.what());
+      }
 
-        LOG_TRACE << fmt::format("RPC send successful, reply: {} (len {})", replyStr, replyStr.size());
-
-        if (!replyPayload.is_object() || !replyPayload["error"].is_number_integer()) {
-          onReply({ { "error", RpcErrorType::NETWORK_ISSUE } });
-        } else {
-          onReply(replyPayload);
-        }
-      });
+      _bufferPool->free(buf);
+      co_return replyPayload;
     }
 
-    void connect(
+    awaitable<void> replyJson(IDWithEndpoint& idEp, const json& payload) {
+      auto buf = _bufferPool->alloc();
+      buf.moveFrontBoundary(10);
+      buf.size(0);
+      buf.writeStringToBack(payload.dump());
+
+      try {
+        co_await reply(idEp, buf);
+        LOG_TRACE << fmt::format("RPC reply successful, payload: {}", payload.dump());
+      } catch (std::exception& err) {
+        LOG_ERROR << fmt::format("RPC reply failed, payload: {}", payload.dump());
+      }
+
+      _bufferPool->free(buf);
+    }
+
+    awaitable<std::tuple<RpcErrorType, std::string, std::string>> connect(
       const udp::endpoint& to,
       const std::string& username,
-      const std::string& password,
-      std::function<void(RpcErrorType, std::string, std::string)> callback
+      const std::string& password
     ) {
-      json payload = {
+      json reply = co_await sendJson(to, {
         { "type", RpcType::CONNECT },
         { "username", username },
         { "password", password },
-      };
-      sendJson(to, payload, [callback](json replyPayload) {
-        if (replyPayload["key"].is_string() && replyPayload["iv"].is_string()) {
-          callback(replyPayload["error"], replyPayload["key"], replyPayload["iv"]);
-        } else {
-          callback(RpcErrorType::INVALID_INPUT, "", "");
-        }
       });
+
+      if (reply["error"].is_number_integer() && reply["error"] != RpcErrorType::SUCCESS) {
+        co_return std::make_tuple(reply["error"], "", "");
+      }
+      if (reply["key"].is_string() && reply["iv"].is_string()) {
+        co_return std::make_tuple(reply["error"], reply["key"], reply["iv"]);
+      }
+      co_return std::make_tuple(RpcErrorType::INVALID_INPUT, "", "");
     }
 
-    void ping(const udp::endpoint& to, std::function<void(RpcErrorType)> callback) {
-      json payload = { { "type", RpcType::PING } };
-      sendJson(to, payload, [callback](json replyPayload) {
-        callback(replyPayload["error"]);
-      });
+    awaitable<RpcErrorType> ping(const udp::endpoint& to) {
+      json reply = co_await sendJson(to, { { "type", RpcType::PING } });
+      co_return reply["error"];
     }
 
-    void disconnect(const udp::endpoint& to, std::function<void(RpcErrorType)> callback) {
-      json payload = { { "type", RpcType::DISCONNECT } };
-      sendJson(to, payload, [callback](json replyPayload) {
-        callback(replyPayload["error"]);
-      });
+    awaitable<RpcErrorType> disconnect(const udp::endpoint& to) {
+      json reply = co_await sendJson(to, { { "type", RpcType::DISCONNECT } });
+      co_return reply["error"];
     }
 
   private:
     BufferPool<1600>* _bufferPool;
 
-    bool _requestHandler(Buffer buf, ControlBlock* control) {
+    void _requestHandler(IDWithEndpoint idEp, Buffer buf) {
       auto jsonStr = buf.readStringFromFront();
       auto payload = json::parse(jsonStr, nullptr, false);
 
       LOG_TRACE << fmt::format("RPC new request: {} (len {})", jsonStr, jsonStr.size());
 
       if (!payload.is_object() || !payload["type"].is_number_integer()) {
-        return false;
+        return;
       }
 
       auto rpcType = payload["type"].get<uint8_t>();
-      json replyPayload;
 
       if (rpcType == RpcType::CONNECT) {
-        RpcErrorType err;
-        std::string key, iv;
-        std::tie(err, key, iv) = onConnect(control->endpoint, payload["username"].get<std::string>(), payload["password"].get<std::string>());
-        replyPayload["error"] = err;
-        replyPayload["key"] = key;
-        replyPayload["iv"] = iv;
+        onConnect(idEp, payload["username"].get<std::string>(), payload["password"].get<std::string>());
       } else if (rpcType == RpcType::DISCONNECT) {
-        replyPayload["error"] = onDisconnect(control->endpoint);
+        onDisconnect(idEp);
       } else if (rpcType == RpcType::PING) {
-        replyPayload["error"] = onPing(control->endpoint);
-      } else {
-        return false;
+        onPing(idEp);
       }
-
-      LOG_TRACE << fmt::format("RPC reply: {}", replyPayload.dump());
-
-      auto replyBuf = _bufferPool->alloc();
-      replyBuf.moveFrontBoundary(10);
-      replyBuf.size(0);
-      replyBuf.writeStringToBack(replyPayload.dump());
-
-      control->buffer = replyBuf;
-      control->onComplete = [&](error_code err, Buffer completeBuf, ControlBlock* control) {
-        _bufferPool->free(completeBuf);
-      };
-
-      return true;
     }
 
   };
 
 } // namespace transmission
 } // namespace libtun
-
-#endif

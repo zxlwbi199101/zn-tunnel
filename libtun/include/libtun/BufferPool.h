@@ -97,6 +97,10 @@ namespace libtun {
       auto buf = readBufferFromFront();
       return std::string((const char*)buf.data(), buf.size());
     }
+    template <class EndianNumber>
+    EndianNumber readNumber(uint32_t from) const {
+      return endian::big_to_native(*(EndianNumber)(_data + from));
+    }
 
     // write content
     bool writeBuffer(const void* buf, uint16_t len, uint32_t from) {
@@ -119,6 +123,11 @@ namespace libtun {
     }
     bool writeStringToBack(const std::string& str) {
       return writeBufferToBack(str.data(), str.size());
+    }
+    template <class EndianNumber>
+    EndianNumber writeNumber(EndianNumber num, uint32_t from) {
+      *((EndianNumer*)(_data + from)) = endian::native_to_big(num);
+      return true;
     }
 
   private:

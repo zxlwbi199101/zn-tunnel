@@ -4,7 +4,8 @@ SYSTEM ?= $(HOST_SYSTEM)
 CXX = g++
 CXXFLAGS += \
 	-DBOOST_ALL_DYN_LINK \
-	-std=c++11 \
+	-std=c++2a \
+	-fcoroutines-ts \
 	-I./include
 
 LDFLAGS += \
@@ -14,15 +15,16 @@ LDFLAGS += \
 	-lboost_thread-mt \
 	-lboost_system-mt \
 	-lboost_date_time-mt \
-	-lboost_regex-mt \
-	-lfmt \
-	-lcryptopp
+	-lboost_regex-mt
 
 ifeq ($(SYSTEM), Darwin)
 else
 endif
 
-TEST_SOURCES = $(wildcard test/*.cc test/**/*.cc)
+# include third party headers and source code
+include ../third_party/Makefile
+
+TEST_SOURCES = $(wildcard test/*.cc test/**/*.cc) third_party_objs
 # TEST_SOURCES = test/main.cc test/transmission/Rpc.cc
 TEST_OBJS = $(patsubst %cc, %o, $(TEST_SOURCES))
 

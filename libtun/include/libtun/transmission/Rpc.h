@@ -1,14 +1,13 @@
-#ifndef LIBTUN_TRANSMISSION_RPC_INCLUDED
-#define LIBTUN_TRANSMISSION_RPC_INCLUDED
+#pragma once
 
 #include <string>
 #include <map>
+#include <set>
 #include <functional>
 #include <chrono>
+#include <memory>
 #include <boost/asio.hpp>
-#include <boost/container_hash/hash.hpp>
-#include <boost/pool/object_pool.hpp>
-#include <boost/endian/conversion.hpp>
+#include <boost/signals2.hpp>
 #include <boost/system/error_code.hpp>
 #include "../logger.h"
 #include "../BufferPool.h"
@@ -18,13 +17,17 @@
 namespace libtun {
 namespace transmission {
 
-  namespace endian = boost::endian;
-  namespace boostErrc = boost::system::errc;
+  namespace boostEc = boost::system::errc;
+  using boost::signals2::signal;
   using boost::asio::steady_timer;
   using boost::asio::io_context;
   using boost::asio::ip::udp;
-  using boost::object_pool;
   using boost::system::error_code;
+  using boost::asio::redirect_error;
+  using boost::asio::awaitable;
+  using boost::asio::co_spawn;
+  using boost::asio::detached;
+  using boost::asio::use_awaitable;
 
   /* A RPC PACKET
   ---------------------------------------------------
@@ -34,104 +37,6 @@ namespace transmission {
 
   class Rpc {
   public:
-
-    struct ControlBlock {
-      int8_t remain = 0;
-      steady_timer timer;
-      udp::endpoint endpoint;
-      uint16_t id;
-      Buffer buffer;
-      std::function<void(error_code, Buffer, ControlBlock*)> onComplete;
-    };
-
-    std::function<bool(Buffer, ControlBlock*)> onRequest;
-
-    Rpc(io_context* context, udp::socket* socket, Cryptor* cryptor, uint16_t retry = 10):
-      _retry(retry),
-      _context(context),
-      _socket(socket),
-      _cryptor(cryptor) {}
-
-    void feed(const udp::endpoint& from, Buffer buf) {
-      auto data = buf.data();
-      _cryptor->decrypt(data + 1, buf.size() - 1);
-      uint8_t type = data[0];
-      uint16_t id = endian::big_to_native(*((uint16_t*)(data + 1)));
-      buf.moveFrontBoundary(3);
-
-      LOG_DEBUG << fmt::format("RAW_RPC feed: type {}, #{} len {}", type, id, buf.size() + 3);
-
-      if (type == Command::REQUEST && _replying.find({from, id}) == _replying.end()) {
-        ControlBlock* control = _pool.malloc();
-        control->remain = _retry;
-        control->timer = steady_timer(*_context);
-        control->endpoint = from;
-        control->id = id;
-        control->buffer = buf;
-        control->onComplete = nullptr;
-
-        LOG_DEBUG << fmt::format("RAW_RPC request: #{} len {}", id, buf.size() + 3);
-
-        if (onRequest(buf, control)) {
-          if (control->buffer.prefixSpace() < 3) {
-            control->onComplete(boostErrc::make_error_code(boostErrc::no_buffer_space), Buffer(), nullptr);
-            _pool.free(control);
-            return;
-          }
-          control->buffer.moveFrontBoundary(-3);
-
-          auto inputData = control->buffer.data();
-          inputData[0] = Command::REPLY;
-          *((uint16_t*)(inputData + 1)) = endian::native_to_big(control->id);
-          _cryptor->encrypt(inputData + 1, control->buffer.size() - 1);
-
-          _replying[{from, id}] = control;
-          _onReplyTimer(error_code(), control);
-        } else {
-          _pool.free(control);
-        }
-      } else if (type == Command::REPLY && _requesting.find(id) != _requesting.end()) {
-        LOG_DEBUG << fmt::format("RAW_RPC reply: #{} len {}", id, buf.size() + 3);
-
-        auto it = _requesting.find(id);
-        it->second->onComplete(error_code(), buf, it->second);
-        it->second->remain = 0;
-      }
-    }
-
-    void send(
-      const udp::endpoint& to,
-      Buffer buf,
-      std::function<void(error_code, Buffer, ControlBlock*)> onComplete
-    ) {
-      if (buf.prefixSpace() < 3) {
-        onComplete(boostErrc::make_error_code(boostErrc::no_buffer_space), Buffer(), nullptr);
-        return;
-      }
-
-      uint16_t id = _nextId();
-
-      buf.moveFrontBoundary(-3);
-      auto data = buf.data();
-      data[0] = Command::REQUEST;
-      *((uint16_t*)(data + 1)) = endian::native_to_big(id);
-      _cryptor->encrypt(data + 1, buf.size() - 1);
-
-      ControlBlock* control = _pool.malloc();
-      control->remain = _retry;
-      control->timer = steady_timer(*_context);
-      control->endpoint = to;
-      control->id = id;
-      control->buffer = buf;
-      control->onComplete = onComplete;
-
-      LOG_DEBUG << fmt::format("RAW_RPC send: #{} len {}", id, buf.size());
-
-      _requesting[id] = control;
-      _onRequestTimer(error_code(), control);
-    }
-
-  private:
 
     struct IDWithEndpoint {
       udp::endpoint endpoint;
@@ -151,15 +56,114 @@ namespace transmission {
       }
     };
 
+    struct RequestControlBlock {
+      RequestControlBlock(io_context* ctx): timer(*ctx) {}
+      steady_timer timer;
+      bool hasReplied = false;
+      Buffer buffer;
+    };
+
+    Rpc(io_context* context, udp::socket* socket, Cryptor* cryptor, uint16_t retry = 10):
+      _retry(retry),
+      _context(context),
+      _socket(socket),
+      _cryptor(cryptor) {}
+
+    void feed(const udp::endpoint& from, Buffer buf) {
+      _cryptor->decrypt(buf.data() + 1, buf.size() - 1);
+      uint8_t type = buf.readNumber<uint8_t>(0);
+      uint16_t id = buf.readNumber<uint16_t>(1);
+      buf.moveFrontBoundary(3);
+
+      IDWithEndpoint idEp = {from, id};
+
+      if (type == Command::REQUEST && _replying.find(idEp) == _replying.end()) {
+        LOG_DEBUG << fmt::format("RAW_RPC request: #{} from: {} len {}", id, from.address().to_v4(), buf.size() + 3);
+        onRequest(idEp, buf);
+      } else if (type == Command::REPLY && _requesting.find(idEp) != _requesting.end()) {
+        LOG_DEBUG << fmt::format("RAW_RPC reply: #{} from: {} len {}", id, from.address().to_v4(), buf.size() + 3);
+
+        auto it = _requesting.find(idEp);
+        if (!it->second->hasReplied) {
+          it->second->buffer = buf;
+          it->second->hasReplied = true;
+          it->second->timer.cancel();
+        }
+      }
+    }
+
+  protected:
+
+    signal<void(IDWithEndpoint, Buffer)> onRequest;
+
+    awaitable<Buffer> send(const udp::endpoint& to, Buffer buf) {
+      if (buf.prefixSpace() < 3) {
+        throw boostEc::make_error_code(boostEc::no_buffer_space);
+      }
+
+      error_code ec;
+      uint16_t id = _nextId();
+      IDWithEndpoint idEp = {to, id};
+      RequestControlBlock control(_context);
+      _requesting[idEp] = &control;
+
+      buf.moveFrontBoundary(-3);
+      buf.writeNumber<uint8_t>(Command::REQUEST, 0);
+      buf.writeNumber<uint16_t>(id, 1);
+      _cryptor->encrypt(buf.data() + 1, buf.size() - 1);
+
+      for (uint16_t i = 0; i < _retry && !control.hasReplied; i++) {
+        co_await _socket->async_send_to(buf.toConstBuffer(), to, redirect_error(use_awaitable, ec));
+        control.timer.expires_after(std::chrono::seconds(1));
+        co_await control.timer.async_wait(redirect_error(use_awaitable, ec));
+      }
+
+      _requesting.erase(idEp);
+
+      if (control.hasReplied) {
+        co_return control.buffer;
+      }
+      if (ec.failed()) {
+        throw ec;
+      }
+      throw boostEc::make_error_code(boostEc::timed_out);
+    }
+
+    awaitable<void> reply(IDWithEndpoint idEp, Buffer buf) {
+      if (buf.prefixSpace() < 3) {
+        throw boostEc::make_error_code(boostEc::no_buffer_space);
+      }
+
+      buf.moveFrontBoundary(-3);
+      buf.writeNumber<uint8_t>(Command::REPLY, 0);
+      buf.writeNumber<uint16_t>(idEp.id, 1);
+      _cryptor->encrypt(buf.data() + 1, buf.size() - 1);
+
+      error_code ec;
+      steady_timer timer(*_context);
+      _replying.insert(idEp);
+
+      for (uint16_t i = 0; i < _retry; i++) {
+        co_await _socket->async_send_to(buf.toConstBuffer(), idEp.endpoint, redirect_error(use_awaitable, ec));
+        timer.expires_after(std::chrono::seconds(1));
+        co_await timer.async_wait(redirect_error(use_awaitable, ec));
+      }
+
+      _requesting.erase(idEp);
+
+      if (ec.failed()) {
+        throw ec;
+      }
+    }
+
+  private:
     uint16_t _id = 1;
     uint16_t _retry;
     io_context* _context;
     udp::socket* _socket;
     Cryptor* _cryptor;
-
-    object_pool<ControlBlock> _pool;
-    std::map<IDWithEndpoint, ControlBlock*> _replying;
-    std::map<uint16_t, ControlBlock*> _requesting;
+    std::set<IDWithEndpoint> _replying;
+    std::map<IDWithEndpoint, RequestControlBlock*> _requesting;
 
     uint16_t _nextId() {
       if (_id == 0xffff) {
@@ -169,57 +173,7 @@ namespace transmission {
       return _id++;
     }
 
-    void _onReplyTimer(const error_code& err, ControlBlock* control) {
-      if (--control->remain <= 0 || err.failed()) {
-        control->onComplete(err, control->buffer, control);
-        _replying.erase({control->endpoint, control->id});
-        _pool.free(control);
-        return;
-      }
-
-      _socket->async_send_to(
-        control->buffer.toConstBuffer(),
-        control->endpoint,
-        [&, control](const error_code& sendErr, std::size_t transfered) {
-          if (sendErr.failed()) {
-            _onReplyTimer(sendErr, control);
-          } else {
-            control->timer.expires_after(std::chrono::seconds(1));
-            control->timer.async_wait(std::bind(&Rpc::_onReplyTimer, this, std::placeholders::_1, control));
-          }
-        }
-      );
-    }
-
-    void _onRequestTimer(const error_code& err, ControlBlock* control) {
-      if (--control->remain <= 0 || err.failed()) {
-        if (control->remain == 0) {
-          control->onComplete(boostErrc::make_error_code(boostErrc::timed_out), Buffer(), control);
-        } else if (err.failed()) {
-          control->onComplete(err, Buffer(), control);
-        }
-        _requesting.erase(control->id);
-        _pool.free(control);
-        return;
-      }
-
-      _socket->async_send_to(
-        control->buffer.toConstBuffer(),
-        control->endpoint,
-        [&, control](const error_code& sendErr, std::size_t transfered) {
-          if (sendErr.failed()) {
-            _onRequestTimer(sendErr, control);
-          } else {
-            control->timer.expires_after(std::chrono::seconds(1));
-            control->timer.async_wait(std::bind(&Rpc::_onRequestTimer, this, std::placeholders::_1, control));
-          }
-        }
-      );
-    }
-
   };
 
 } // namespace transmission
 } // namespace libtun
-
-#endif
