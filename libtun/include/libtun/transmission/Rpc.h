@@ -18,11 +18,11 @@ namespace libtun {
 namespace transmission {
 
   namespace boostEc = boost::system::errc;
+  using boost::system::error_code;
   using boost::signals2::signal;
   using boost::asio::steady_timer;
   using boost::asio::io_context;
   using boost::asio::ip::udp;
-  using boost::system::error_code;
   using boost::asio::redirect_error;
   using boost::asio::awaitable;
   using boost::asio::co_spawn;
