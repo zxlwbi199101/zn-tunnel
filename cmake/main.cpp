@@ -1,4 +1,9 @@
+#include <iostream>
+#include <cstdio>
 
+#include <fmt/core.h>
+#include <nlohmann/json.hpp>
+// #include <tiny-AES-c/aes.hpp>
 
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
@@ -6,7 +11,6 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/signal_set.hpp>
 #include <boost/asio/write.hpp>
-#include <cstdio>
 
 using boost::asio::ip::tcp;
 using boost::asio::awaitable;
@@ -14,6 +18,9 @@ using boost::asio::co_spawn;
 using boost::asio::detached;
 using boost::asio::use_awaitable;
 namespace this_coro = boost::asio::this_coro;
+
+using nlohmann::json;
+
 
 awaitable<void> echo(tcp::socket socket)
 {
@@ -50,6 +57,13 @@ awaitable<void> listener()
 
 int main()
 {
+
+  json data = {
+    { "username", "xinlei" }
+  };
+
+  std::cout << fmt::format("the data is: {}", data.dump()) << std::endl;
+
   try
   {
     boost::asio::io_context io_context(1);
