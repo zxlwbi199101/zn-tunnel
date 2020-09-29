@@ -1,71 +1,58 @@
-#ifndef LIBTUN_TRANSMISSION_CRYPTOR_INCLUDED
-#define LIBTUN_TRANSMISSION_CRYPTOR_INCLUDED
+#pragma once
 
 #include <string>
-#include <boost/asio/buffer.hpp>
-// #include <cryptopp/osrng.h>
-// #include <cryptopp/aes.h>
-// #include <cryptopp/modes.h>
+#include <random>
+#include <tiny-AES-c/aes.hpp>
 
 namespace libtun {
 namespace transmission {
 
-  using boost::asio::mutable_buffer;
-
   class Cryptor {
   public:
-
-    // typedef CryptoPP::byte Byte;
 
     std::string key;
     std::string iv;
 
     Cryptor(const std::string& _key, const std::string& _iv) {
-      // key = _key;
-      // iv = _iv;
-      // _encryption.SetKeyWithIV((Byte*)(key.data()), key.size(), (Byte*)(iv.data()));
-      // _decryption.SetKeyWithIV((Byte*)(key.data()), key.size(), (Byte*)(iv.data()));
+      key = _key;
+      iv = _iv;
+      AES_init_ctx(&_ctx, (uint8_t*)key.data());
     }
 
     Cryptor() {
-      // key.resize(CryptoPP::AES::DEFAULT_KEYLENGTH);
-      // iv.resize(CryptoPP::AES::DEFAULT_KEYLENGTH);
+      std::default_random_engine generator;
+      std::uniform_int_distribution<uint8_t> distribution(0, 255);
 
-      // CryptoPP::AutoSeededRandomPool random;
-      // random.GenerateBlock((Byte*)(key.data()), key.size());
-      // random.GenerateBlock((Byte*)(iv.data()), iv.size());
-      // _encryption.SetKeyWithIV((Byte*)(key.data()), key.size(), (Byte*)(iv.data()));
-      // _decryption.SetKeyWithIV((Byte*)(key.data()), key.size(), (Byte*)(iv.data()));
+      key.resize(16);
+      iv.resize(16);
+
+      for (uint8_t i = 0; i < 16; i++) {
+        key.data()[i] = (char)(distribution(generator));
+        iv.data()[i] = (char)(distribution(generator));
+      }
+
+      AES_init_ctx(&_ctx, (uint8_t*)key.data());
     }
 
     Cryptor(const Cryptor& other):
       Cryptor(other.key, other.iv) {}
 
-    void encrypt(void* data, uint32_t size) {
-      // _encryption.ProcessData((Byte*)data, (Byte*)data, size);
-      // _encryption.Resynchronize((Byte*)(iv.data()), iv.size());
-    }
-    void encrypt(void* src, void* dest, uint32_t size) {
-      // _encryption.ProcessData((Byte*)dest, (Byte*)src, size);
-      // _encryption.Resynchronize((Byte*)(iv.data()), iv.size());
+    void encrypt(uint8_t* data, uint32_t size) {
+      AES_ctx_set_iv(&_ctx, (uint8_t*)iv.data());
+      AES_CBC_encrypt_buffer(&_ctx, data, size);
     }
 
-    void decrypt(void* data, uint32_t size) {
-      // _decryption.ProcessData((Byte*)data, (Byte*)data, size);
-      // _decryption.Resynchronize((Byte*)(iv.data()), iv.size());
-    }
-    void decrypt(void* src, void* dest, uint32_t size) {
-      // _decryption.ProcessData((Byte*)dest, (Byte*)src, size);
-      // _decryption.Resynchronize((Byte*)(iv.data()), iv.size());
+    void decrypt(uint8_t* data, uint32_t size) {
+      AES_ctx_set_iv(&_ctx, (uint8_t*)iv.data());
+      AES_CBC_decrypt_buffer(&_ctx, data, size);
     }
 
   private:
-    // CryptoPP::CFB_Mode<CryptoPP::AES>::Encryption _encryption;
-    // CryptoPP::CFB_Mode<CryptoPP::AES>::Decryption _decryption;
+
+    struct AES_ctx _ctx;
+
   };
 
 
 } // namespace transmission
 } // namespace libtun
-
-#endif

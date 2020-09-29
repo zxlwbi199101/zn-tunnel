@@ -1,5 +1,4 @@
-#ifndef LIBTUN_BUFFER_POOL_INCLUDED
-#define LIBTUN_BUFFER_POOL_INCLUDED
+#pragma once
 
 #include <stdint.h>
 #include <list>
@@ -126,7 +125,7 @@ namespace libtun {
     }
     template <class EndianNumber>
     EndianNumber writeNumber(EndianNumber num, uint32_t from) {
-      *((EndianNumer*)(_data + from)) = endian::native_to_big(num);
+      *((EndianNumber*)(_data + from)) = endian::native_to_big(num);
       return true;
     }
 
@@ -193,5 +192,3 @@ namespace libtun {
   };
 
 } // namespace libtun
-
-#endif

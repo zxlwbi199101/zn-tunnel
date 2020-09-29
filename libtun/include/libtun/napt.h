@@ -1,5 +1,4 @@
-#ifndef LIBTUN_NAPT_INCLUDED
-#define LIBTUN_NAPT_INCLUDED
+#pragma once
 
 #include <map>
 #include <unordered_map>
@@ -169,5 +168,3 @@ namespace libtun {
   };
 
 } // namespace libtun
-
-#endif

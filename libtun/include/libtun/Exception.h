@@ -1,5 +1,4 @@
-#ifndef LIBTUN_EXCEPTION_INCLUDED
-#define LIBTUN_EXCEPTION_INCLUDED
+#pragma once
 
 #include <exception>
 #include <string>
@@ -22,5 +21,3 @@ namespace libtun {
   };
 
 }
-
-#endif

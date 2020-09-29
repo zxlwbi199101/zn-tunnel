@@ -1,5 +1,4 @@
-#ifndef LIBTUN_RAW_SOCKET_INCLUDED
-#define LIBTUN_RAW_SOCKET_INCLUDED
+#pragma once
 
 #include <string>
 #include <thread>
@@ -93,5 +92,3 @@ namespace libtun {
   };
 
 } // namespace libtun
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef LIBTUN_PROTOCOL_TCP_INCLUDED
-#define LIBTUN_PROTOCOL_TCP_INCLUDED
+#pragma once
 
 #include <stdint.h>
 #include <boost/asio/buffer.hpp>
@@ -130,5 +129,3 @@ namespace protocol {
 
 } // namespace protocol
 } // namespace libtun
-
-#endif

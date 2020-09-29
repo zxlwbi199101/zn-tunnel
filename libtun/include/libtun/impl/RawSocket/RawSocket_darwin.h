@@ -1,5 +1,4 @@
-#ifndef LIBTUN_IMPL_RAWSOCKET_DARWIN_INCLUDED
-#define LIBTUN_IMPL_RAWSOCKET_DARWIN_INCLUDED
+#pragma once
 
 #include <net/if.h>
 #include <net/bpf.h>
@@ -157,5 +156,3 @@ namespace impl {
 
 } // namespace impl
 } // namespace libtun
-
-#endif

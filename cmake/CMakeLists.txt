@@ -2,20 +2,18 @@ project(client-cli)
 cmake_minimum_required(VERSION 3.15)
 
 set(CMAKE_CXX_STANDARD 20)
+add_definitions(-DBOOST_ASIO_DISABLE_CONCEPTS)
 
 if (MSVC)
   add_compile_options(/await)
-  add_definitions(-DBOOST_ASIO_DISABLE_CONCEPTS)
 else()
   add_compile_options(-fcoroutines-ts)
-  add_definitions(-DBOOST_ASIO_DISABLE_CONCEPTS)
-  add_definitions(-DBOOST_LOG_DYN_LINK)
 endif()
 
 add_executable(client main.cpp)
 
 # boost (external)
-find_package(Boost COMPONENTS regex system)
+find_package(Boost COMPONENTS regex log_setup log filesystem thread date_time)
 target_include_directories(client PUBLIC ${Boost_INCLUDE_DIRS})
 target_link_libraries(client ${Boost_LIBRARIES})
 

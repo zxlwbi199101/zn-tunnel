@@ -1,5 +1,4 @@
-#ifndef TEST_UTILS_INCLUDED
-#define TEST_UTILS_INCLUDED
+#pragma once
 
 #include <boost/asio/buffer.hpp>
 #include <boost/filesystem.hpp>
@@ -18,5 +17,3 @@ inline mutable_buffer readFile(const std::string& path) {
 
   return mutable_buffer(data, size);
 }
-
-#endif

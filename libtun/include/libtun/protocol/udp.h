@@ -1,5 +1,4 @@
-#ifndef LIBTUN_PROTOCOL_UDP_INCLUDED
-#define LIBTUN_PROTOCOL_UDP_INCLUDED
+#pragma once
 
 #include <stdint.h>
 #include <boost/asio/buffer.hpp>
@@ -74,5 +73,3 @@ namespace protocol {
 
 } // namespace protocol
 } // namespace libtun
-
-#endif

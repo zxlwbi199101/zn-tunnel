@@ -1,5 +1,4 @@
-#ifndef LIBTUN_IMPL_TUNNEL_DARWIN_INCLUDED
-#define LIBTUN_IMPL_TUNNEL_DARWIN_INCLUDED
+#pragma once
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -88,5 +87,3 @@ namespace impl {
 
 } // namespace impl
 } // namespace libtun
-
-#endif

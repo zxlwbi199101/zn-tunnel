@@ -1,5 +1,4 @@
-#ifndef LIBTUN_TRANSMISSION_SESSION_INCLUDED
-#define LIBTUN_TRANSMISSION_SESSION_INCLUDED
+#pragma once
 
 #include <chrono>
 #include <boost/asio/ip/udp.hpp>
@@ -51,5 +50,3 @@ namespace transmission {
 
 } // namespace transmission
 } // namespace libtun
-
-#endif

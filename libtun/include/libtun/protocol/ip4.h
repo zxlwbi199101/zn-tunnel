@@ -1,5 +1,4 @@
-#ifndef LIBTUN_PROTOCOL_IP4_INCLUDED
-#define LIBTUN_PROTOCOL_IP4_INCLUDED
+#pragma once
 
 #include <stdint.h>
 #include <boost/asio/ip/address_v4.hpp>
@@ -152,5 +151,3 @@ namespace protocol {
 
 } // namespace protocol
 } // namespace libtun
-
-#endif

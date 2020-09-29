@@ -1,5 +1,4 @@
-#ifndef SERVER_TUNNEL_SERVER_INCLUDED
-#define SERVER_TUNNEL_SERVER_INCLUDED
+#pragma once
 
 #include <exception>
 #include <string>
@@ -76,5 +75,3 @@ namespace znserver {
   };
 
 } // namespace znserver
-
-#endif

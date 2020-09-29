@@ -1,5 +1,4 @@
-#ifndef LIBTUN_TUNNEL_INCLUDED
-#define LIBTUN_TUNNEL_INCLUDED
+#pragma once
 
 #include <stdint.h>
 #include <string>
@@ -39,6 +38,3 @@ namespace libtun {
     impl::TunnelImpl _impl;
   };
 }
-
-
-#endif

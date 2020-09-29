@@ -1,12 +1,9 @@
 #pragma once
 
 #include <string>
-#include <functional>
 #include <tuple>
 #include <boost/asio.hpp>
 #include <boost/signals2.hpp>
-#include <boost/pool/object_pool.hpp>
-#include <boost/endian/conversion.hpp>
 #include <boost/system/error_code.hpp>
 #include <nlohmann/json.hpp>
 #include "../logger.h"
@@ -17,12 +14,10 @@
 namespace libtun {
 namespace transmission {
 
-  namespace endian = boost::endian;
   using boost::signals2::signal;
   using boost::asio::steady_timer;
   using boost::asio::io_context;
   using boost::asio::ip::udp;
-  using boost::object_pool;
   using boost::system::error_code;
   using nlohmann::json;
 

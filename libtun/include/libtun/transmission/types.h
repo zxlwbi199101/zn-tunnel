@@ -1,5 +1,4 @@
-#ifndef LIBTUN_TRANSMISSION_CONSTANT_INCLUDED
-#define LIBTUN_TRANSMISSION_CONSTANT_INCLUDED
+#pragma once
 
 namespace libtun {
 namespace transmission {
@@ -34,5 +33,3 @@ namespace transmission {
 
 } // namespace transmission
 } // namespace libtun
-
-#endif

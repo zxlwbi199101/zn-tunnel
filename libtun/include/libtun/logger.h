@@ -1,5 +1,4 @@
-#ifndef LIBTUN_LOGGER_INCLUDED
-#define LIBTUN_LOGGER_INCLUDED
+#pragma once
 
 #include <string>
 #include <fstream>
@@ -96,5 +95,3 @@ namespace libtun {
   };
 
 }
-
-#endif
