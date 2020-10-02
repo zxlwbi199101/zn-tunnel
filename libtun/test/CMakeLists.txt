@@ -1,4 +1,5 @@
-add_executable(test main.cc BufferPool.cc transmission/Cryptor.cc)
+file(GLOB_RECURSE SOURCES LIST_DIRECTORIES false *.cc)
+add_executable(test ${SOURCES})
 
 # self include
 target_include_directories(test PUBLIC ../include)
