@@ -59,7 +59,7 @@ namespace transmission {
       try {
         auto replyBuf = co_await send(to, buf);
         auto replyStr = replyBuf.readStringFromFront();
-        replyPayload = json::parse(replyStr, nullptr, false);
+        auto replyPayload = json::parse(replyStr, nullptr, false);
         LOG_TRACE << fmt::format("RPC send successful, request: {}, reply({}): {}", payload.dump(), replyStr.size(), replyStr);
       } catch(std::exception ex) {
         LOG_ERROR << fmt::format("RPC send failed, request: {}, error: {}", payload.dump(), ex.what());

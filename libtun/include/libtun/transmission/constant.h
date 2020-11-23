@@ -22,6 +22,7 @@ namespace transmission {
     TOO_MANY_CONNECTION,
     NOT_CONNECTED,
     NETWORK_ISSUE,
+    TIMEOUT,
   };
 
   enum SessionStatus: uint8_t {

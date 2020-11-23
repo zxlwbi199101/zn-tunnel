@@ -11,6 +11,7 @@
 #include <boost/system/error_code.hpp>
 #include "../logger.h"
 #include "../BufferPool.h"
+#include "./RpcBuffer.h"
 #include "./constant.h"
 #include "./Cryptor.h"
 
@@ -30,9 +31,9 @@ namespace transmission {
   using boost::asio::use_awaitable;
 
   /* A RPC PACKET
-  ---------------------------------------------------
-  |  Command  |          ID           |    CONTENT...
-  ---------------------------------------------------
+  ---------------------------------------------------------
+  |command |       id       |       len      | json string
+  ---------------------------------------------------------
   */
 
   class Rpc {
@@ -60,57 +61,49 @@ namespace transmission {
       RequestControlBlock(io_context* ctx): timer(*ctx) {}
       steady_timer timer;
       bool hasReplied = false;
-      Buffer buffer;
+      json data;
     };
 
-    Rpc(io_context* context, udp::socket* socket, Cryptor* cryptor, uint16_t retry = 10):
+    signal<void(IDWithEndpoint, json)> onRequest;
+
+    Rpc(io_context* context, udp::socket* socket, Cryptor* cryptor, BufferPool<1600>* pool, uint16_t retry = 10):
       _retry(retry),
       _context(context),
       _socket(socket),
-      _cryptor(cryptor) {}
+      _cryptor(cryptor),
+      _pool(pool) {}
 
-    void feed(const udp::endpoint& from, Buffer buf) {
-      _cryptor->decrypt(buf.data() + 1, buf.size() - 1);
-      uint8_t type = buf.readNumber<uint8_t>(0);
-      uint16_t id = buf.readNumber<uint16_t>(1);
-      buf.moveFrontBoundary(3);
+    void feed(const udp::endpoint& from, Buffer incomingBuf) {
+      RpcBuffer buf(incomingBuf, _cryptor);
+      IDWithEndpoint idEp = {from, buf.id()};
 
-      IDWithEndpoint idEp = {from, id};
+      if (!buf.isValid()) {
+        return;
+      }
 
-      if (type == Command::REQUEST && _replying.find(idEp) == _replying.end()) {
-        LOG_DEBUG << fmt::format("RAW_RPC request: #{} from: {} len {}", id, from.address().to_v4(), buf.size() + 3);
-        onRequest(idEp, buf);
-      } else if (type == Command::REPLY && _requesting.find(idEp) != _requesting.end()) {
-        LOG_DEBUG << fmt::format("RAW_RPC reply: #{} from: {} len {}", id, from.address().to_v4(), buf.size() + 3);
-
+      if (buf.command() == Command::REQUEST && _replying.find(idEp) == _replying.end()) {
+        LOG_DEBUG << fmt::format("RAW_RPC request: #{} from: {} len {}", idEp.id, from.address().to_v4(), buf.size());
+        onRequest(idEp, buf.content());
+      } else if (buf.command() == Command::REPLY) {
         auto it = _requesting.find(idEp);
-        if (!it->second->hasReplied) {
-          it->second->buffer = buf;
+
+        if (it != _requesting.end() && !it->second->hasReplied) {
+          LOG_DEBUG << fmt::format("RAW_RPC reply: #{} from: {} len {}", idEp.id, from.address().to_v4(), buf.size());
+          it->second->data = buf.content();
           it->second->hasReplied = true;
           it->second->timer.cancel();
         }
       }
     }
 
-  protected:
-
-    signal<void(IDWithEndpoint, Buffer)> onRequest;
-
-    awaitable<Buffer> send(const udp::endpoint& to, Buffer buf) {
-      if (buf.prefixSpace() < 3) {
-        throw boostEc::make_error_code(boostEc::no_buffer_space);
-      }
-
+    awaitable<json> send(const udp::endpoint& to, json data) {
       error_code ec;
-      uint16_t id = _nextId();
-      IDWithEndpoint idEp = {to, id};
+      IDWithEndpoint idEp = {to, _nextId()};
       RequestControlBlock control(_context);
       _requesting[idEp] = &control;
 
-      buf.moveFrontBoundary(-3);
-      buf.writeNumber<uint8_t>(Command::REQUEST, 0);
-      buf.writeNumber<uint16_t>(id, 1);
-      _cryptor->encrypt(buf.data() + 1, buf.size() - 1);
+      RpcBuffer buf(_pool->alloc(), _cryptor, false);
+      buf.command(Command::REQUEST).id(idEp.id).content(data);
 
       for (uint16_t i = 0; i < _retry && !control.hasReplied; i++) {
         co_await _socket->async_send_to(buf.toConstBuffer(), to, redirect_error(use_awaitable, ec));
@@ -119,29 +112,21 @@ namespace transmission {
       }
 
       _requesting.erase(idEp);
+      _pool->free(buf);
 
-      if (control.hasReplied) {
-        co_return control.buffer;
+      if (!control.hasReplied) {
+        co_return { { "error", RpcErrorType::TIMEOUT } };
       }
-      if (ec.failed()) {
-        throw ec;
-      }
-      throw boostEc::make_error_code(boostEc::timed_out);
+      co_return control.data;
     }
 
-    awaitable<void> reply(IDWithEndpoint idEp, Buffer buf) {
-      if (buf.prefixSpace() < 3) {
-        throw boostEc::make_error_code(boostEc::no_buffer_space);
-      }
-
-      buf.moveFrontBoundary(-3);
-      buf.writeNumber<uint8_t>(Command::REPLY, 0);
-      buf.writeNumber<uint16_t>(idEp.id, 1);
-      _cryptor->encrypt(buf.data() + 1, buf.size() - 1);
-
+    awaitable<void> reply(IDWithEndpoint idEp, json data) {
       error_code ec;
       steady_timer timer(*_context);
       _replying.insert(idEp);
+
+      RpcBuffer buf(_pool->alloc(), _cryptor, false);
+      buf.command(Command::REPLY).id(idEp.id).content(data);
 
       for (uint16_t i = 0; i < _retry; i++) {
         co_await _socket->async_send_to(buf.toConstBuffer(), idEp.endpoint, redirect_error(use_awaitable, ec));
@@ -150,10 +135,7 @@ namespace transmission {
       }
 
       _requesting.erase(idEp);
-
-      if (ec.failed()) {
-        throw ec;
-      }
+      _pool->free(buf);
     }
 
   private:
@@ -162,6 +144,7 @@ namespace transmission {
     io_context* _context;
     udp::socket* _socket;
     Cryptor* _cryptor;
+    BufferPool<1600>* _pool;
     std::set<IDWithEndpoint> _replying;
     std::map<IDWithEndpoint, RequestControlBlock*> _requesting;
 

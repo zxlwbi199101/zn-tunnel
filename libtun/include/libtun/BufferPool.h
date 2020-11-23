@@ -38,95 +38,43 @@ namespace libtun {
       return mutable_buffer(_data, _size);
     }
 
-    // mutates
-    uint32_t size(uint32_t len) {
-      if (len <= internalSize() - prefixSpace()) {
-        _size = len;
-      }
-      return _size;
-    }
-
-    uint32_t shift(int32_t distance) {
-      if (distance <= (int32_t)suffixSpace() && -distance <= (int32_t)prefixSpace()) {
-        _data += distance;
-      }
-      return _size;
-    }
-
-    uint32_t moveFrontBoundary(int distance) {
-      if (-distance <= (int32_t)prefixSpace() && distance <= (int32_t)_size) {
-        _data += distance;
-        _size -= distance;
-      }
-      return _size;
-    }
-
-    uint32_t moveBackBoundary(int distance) {
-      if (distance <= (int32_t)suffixSpace() && -distance <= (int32_t)_size) {
-        _size += distance;
-      }
-      return _size;
-    }
-
-    // read content
-    mutable_buffer readBuffer(uint32_t from) const {
-      if (size() < from + 2) {
-        return mutable_buffer();
-      }
-
-      uint16_t len = endian::big_to_native(*((uint16_t*)(_data + from)));
-      if (size() < from + 2 + len) {
-        return mutable_buffer();
-      }
-      return mutable_buffer(_data + from + 2, len);
-    }
-    mutable_buffer readBufferFromFront() {
-      auto buf = readBuffer(0);
-      if (buf.size() > 0) {
-        moveFrontBoundary(2 + buf.size());
-      }
-      return buf;
-    }
-
-    std::string readString(uint32_t from) const {
-      auto buf = readBuffer(from);
-      return std::string((const char*)buf.data(), buf.size());
-    }
-    std::string readStringFromFront() {
-      auto buf = readBufferFromFront();
-      return std::string((const char*)buf.data(), buf.size());
-    }
     template <class EndianNumber>
     EndianNumber readNumber(uint32_t from) const {
       return endian::big_to_native(*(EndianNumber)(_data + from));
     }
 
-    // write content
-    bool writeBuffer(const void* buf, uint16_t len, uint32_t from) {
-      if (from + len + 2 >= size() + suffixSpace()) {
-        return false;
-      }
-      if (from + len + 2 > size()) {
-        size(from + len + 2);
-      }
-      *((uint16_t*)(_data + from)) = endian::native_to_big(len);
-      std::memcpy(_data + from + 2, buf, len);
-      return true;
-    }
-    bool writeBufferToBack(const void* buf, uint16_t len) {
-      return writeBuffer(buf, len, size());
+    // setters
+    Buffer& data(uint8_t* d) {
+      _data = d;
+      return *this;
     }
 
-    bool writeString(const std::string& str, uint32_t from) {
-      return writeBuffer(str.data(), str.size(), from);
+    Buffer& size(uint32_t len) {
+      if (len <= internalSize() - prefixSpace()) {
+        _size = len;
+      }
+      return *this;
     }
-    bool writeStringToBack(const std::string& str) {
-      return writeBufferToBack(str.data(), str.size());
+
+    Buffer& moveFrontBoundary(int distance) {
+      if (-distance <= (int32_t)prefixSpace() && distance <= (int32_t)_size) {
+        _data += distance;
+        _size -= distance;
+      }
+      return *this;
     }
+
+    Buffer& moveBackBoundary(int distance) {
+      if (distance <= (int32_t)suffixSpace() && -distance <= (int32_t)_size) {
+        _size += distance;
+      }
+      return *this;
+    }
+
     template <class EndianNumber>
-    EndianNumber writeNumber(EndianNumber num, uint32_t from) {
+    Buffer& writeNumber(EndianNumber num, uint32_t from) {
       *((EndianNumber*)(_data + from)) = endian::native_to_big(num);
-      return true;
+      return *this
     }
 
   private:
@@ -134,6 +82,7 @@ namespace libtun {
     uint32_t _internalSize;
     uint8_t* _data;
     uint32_t _size;
+
   };
 
 
