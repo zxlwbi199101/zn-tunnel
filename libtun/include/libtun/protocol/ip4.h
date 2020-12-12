@@ -58,7 +58,7 @@ namespace protocol {
     uint8_t headerLen() const {
       return _header->ver_ihl & 0xf;
     }
-    u_int8_t serviceType() const {
+    uint8_t serviceType() const {
       return _header->serviceType;
     }
     uint16_t totalLen() const {

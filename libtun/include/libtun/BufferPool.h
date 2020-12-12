@@ -40,7 +40,7 @@ namespace libtun {
 
     template <class EndianNumber>
     EndianNumber readNumber(uint32_t from) const {
-      return endian::big_to_native(*(EndianNumber)(_data + from));
+      return endian::big_to_native(*(EndianNumber*)(_data + from));
     }
 
     // setters
@@ -74,7 +74,7 @@ namespace libtun {
     template <class EndianNumber>
     Buffer& writeNumber(EndianNumber num, uint32_t from) {
       *((EndianNumber*)(_data + from)) = endian::native_to_big(num);
-      return *this
+      return *this;
     }
 
   private:

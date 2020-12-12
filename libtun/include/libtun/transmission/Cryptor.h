@@ -21,7 +21,7 @@ namespace transmission {
 
     Cryptor() {
       std::default_random_engine generator;
-      std::uniform_int_distribution<uint8_t> distribution(0, 255);
+      std::uniform_int_distribution<unsigned short> distribution(0, 255);
 
       key.resize(16);
       iv.resize(16);
